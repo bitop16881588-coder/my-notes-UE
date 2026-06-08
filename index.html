@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>UE 高效知识库 (同步版)</title>
+    <title>UE 高效知识库 (已配置版)</title>
     <style>
         body { font-family: 'Microsoft JhengHei', sans-serif; display: flex; height: 100vh; margin: 0; background: #f0f2f5; }
         #sidebar { width: 320px; background: #2c3e50; color: white; display: flex; flex-direction: column; height: 100%; box-shadow: 2px 0 5px rgba(0,0,0,0.1); }
@@ -28,7 +28,7 @@
 <div id="main">
     <div id="contentArea" class="card">
         <h2>系统就绪</h2>
-        <p>请点击目录操作。</p>
+        <p>点击左侧目录进行操作。</p>
     </div>
 </div>
 
@@ -36,30 +36,33 @@
     let notes = JSON.parse(localStorage.getItem('ueNotes')) || [];
     let currentId = null;
 
-    // --- 1. 核心云同步 (GitHub API) ---
+    // --- 同步逻辑 ---
     async function syncToCloud() {
-        const token = prompt("请输入 GitHub Token:");
-        if (!token) return;
-        const owner = "你的GitHub用户名", repo = "你的仓库名"; // <--- 这里务必修改
+        const token = "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";
+        const owner = "bitop16881588";
+        const repo = "bitop16881588-coder";
         
-        // 获取文件当前 SHA (用于覆盖更新)
-        const getRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/data.json`, { headers: { "Authorization": `token ${token}` }});
-        const fileData = await getRes.json();
-        
-        // 提交更新
-        await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/data.json`, {
-            method: 'PUT',
-            headers: { "Authorization": `token ${token}`, "Content-Type": "application/json" },
-            body: JSON.stringify({
-                message: "Sync Notes",
-                content: btoa(unescape(encodeURIComponent(JSON.stringify(notes)))),
-                sha: fileData.sha
-            })
-        });
-        alert("同步成功！");
+        try {
+            // 获取 SHA
+            const getRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/data.json`, { headers: { "Authorization": `token ${token}` }});
+            const fileData = await getRes.json();
+            
+            // 提交更新
+            const putRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/data.json`, {
+                method: 'PUT',
+                headers: { "Authorization": `token ${token}`, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    message: "Sync Notes",
+                    content: btoa(unescape(encodeURIComponent(JSON.stringify(notes)))),
+                    sha: fileData.sha
+                })
+            });
+            if(putRes.ok) alert("✅ 同步成功！");
+            else alert("❌ 同步失败，请检查仓库是否存在 data.json");
+        } catch(e) { alert("出错啦：" + e); }
     }
 
-    // --- 2. 基础逻辑 (渲染、编辑、新增、删除) ---
+    // --- 基础逻辑 (渲染、编辑、删除) ---
     function render() {
         notes.sort((a, b) => (b.isPinned - a.isPinned));
         document.getElementById('noteList').innerHTML = notes.map(n => `
@@ -74,7 +77,6 @@
         document.getElementById('contentArea').innerHTML = `
             <h2>${n.title}</h2>
             <p style="white-space:pre-wrap;">${n.content}</p>
-            ${n.img ? `<img src="${n.img}" style="max-width:100%;">` : ''}
             <br><button class="btn" style="background:#f39c12" onclick="togglePin()">置顶</button>
             <button class="btn" style="background:#3498db" onclick="editMode()">编辑</button>
             <button class="btn" style="background:#e74c3c" onclick="deleteNote()">删除</button>`;
@@ -85,24 +87,13 @@
         document.getElementById('contentArea').innerHTML = `
             <input type="text" id="editTitle" value="${n.title}" style="width:100%; padding:10px;">
             <textarea id="editContent" rows="10" style="width:100%; padding:10px; margin-top:10px;">${n.content}</textarea>
-            <input type="file" id="imgUpload" accept="image/*">
             <br><button class="btn" style="background:#27ae60" onclick="saveEdit()">保存</button>`;
     }
 
     function saveEdit() {
         const title = document.getElementById('editTitle').value;
         const content = document.getElementById('editContent').value;
-        const file = document.getElementById('imgUpload').files[0];
-        
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = e => updateData(title, content, e.target.result);
-            reader.readAsDataURL(file);
-        } else updateData(title, content, notes.find(n => n.id === currentId).img);
-    }
-
-    function updateData(title, content, img) {
-        notes = notes.map(n => n.id === currentId ? {...n, title, content, img} : n);
+        notes = notes.map(n => n.id === currentId ? {...n, title, content} : n);
         localStorage.setItem('ueNotes', JSON.stringify(notes));
         render(); viewNote(currentId);
     }
@@ -110,8 +101,7 @@
     function newNote() {
         const title = prompt("标题:");
         if (!title) return;
-        const n = { id: Date.now(), title, content: "内容...", img: "", isPinned: false };
-        notes.push(n);
+        notes.push({ id: Date.now(), title, content: "...", isPinned: false });
         localStorage.setItem('ueNotes', JSON.stringify(notes));
         render();
     }
@@ -123,7 +113,7 @@
     }
 
     function deleteNote() {
-        if(confirm("确定？")) {
+        if(confirm("确定删除？")) {
             notes = notes.filter(n => n.id !== currentId);
             localStorage.setItem('ueNotes', JSON.stringify(notes));
             render();
