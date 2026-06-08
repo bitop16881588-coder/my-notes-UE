@@ -2,123 +2,37 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>UE 高效笔记系统</title>
+    <title>UE 多人协作笔记</title>
     <style>
-        body { font-family: 'Microsoft JhengHei', sans-serif; display: flex; height: 100vh; margin: 0; background: #f0f2f5; }
-        #sidebar { width: 320px; background: #2c3e50; color: white; display: flex; flex-direction: column; height: 100%; box-shadow: 2px 0 5px rgba(0,0,0,0.1); }
-        .sidebar-header { padding: 20px; font-weight: bold; background: #1a252f; border-bottom: 2px solid #1abc9c; display: flex; justify-content: space-between; align-items: center; }
-        #noteList { flex: 1; overflow-y: auto; }
-        .note-item { padding: 15px; border-bottom: 1px solid #34495e; cursor: pointer; display: flex; justify-content: space-between; }
-        .note-item:hover { background: #34495e; }
-        #main { flex: 1; padding: 40px; overflow-y: auto; }
-        .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
-        .btn { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; color: white; margin-left: 5px; font-size: 12px; }
+        body { font-family: sans-serif; display: flex; height: 100vh; margin: 0; }
+        #sidebar { width: 300px; background: #2c3e50; color: white; padding: 20px; overflow-y: auto; }
+        #main { flex: 1; padding: 40px; }
     </style>
 </head>
 <body>
+    <div id="sidebar"><h3>笔记目录</h3><div id="list"></div></div>
+    <div id="main"><div id="display">请选择笔记</div></div>
 
-<div id="sidebar">
-    <div class="sidebar-header">📂 UE 笔记
-        <button onclick="newNote()" style="background:#1abc9c; border:none; color:white; padding:5px 10px; border-radius:4px;">+ 新增</button>
-        <button onclick="exportNotes()" style="background:#f39c12; border:none; color:white; padding:5px 10px; border-radius:4px;">导出</button>
-    </div>
-    <div id="noteList"></div>
-</div>
-
-<div id="main">
-    <div id="contentArea" class="card">
-        <h2>欢迎使用系统</h2>
-        <p>左侧选择笔记以进行操作。</p>
-    </div>
-</div>
-
-<script>
-    let notes = JSON.parse(localStorage.getItem('ueNotes')) || [];
-    let currentId = null;
-
-    function render() {
-        // 先按置顶状态排序（isPinned 为 true 的在前）
-        notes.sort((a, b) => (b.isPinned - a.isPinned));
-        document.getElementById('noteList').innerHTML = notes.map(n => `
-            <div class="note-item" onclick="viewNote(${n.id})">
-                <strong>${n.isPinned ? '📌' : ''} ${n.title}</strong>
-            </div>`).join('');
-    }
-
-    function viewNote(id) {
-        currentId = id;
-        const n = notes.find(n => n.id === id);
-        document.getElementById('contentArea').innerHTML = `
-            <h2>${n.title}</h2>
-            <p>${n.content}</p>
-            ${n.img ? `<img src="${n.img}" style="max-width:100%; border-radius:8px;">` : ''}
-            <br>
-            <button class="btn" style="background:#f39c12" onclick="togglePin(${n.id})">${n.isPinned ? '取消置顶' : '置顶'}</button>
-            <button class="btn" style="background:#3498db" onclick="editMode()">编辑</button>
-            <button class="btn" style="background:#e74c3c" onclick="deleteNote(${n.id})">删除</button>`;
-    }
-
-    function togglePin(id) {
-        notes = notes.map(n => n.id === id ? {...n, isPinned: !n.isPinned} : n);
-        localStorage.setItem('ueNotes', JSON.stringify(notes));
-        render(); viewNote(id);
-    }
-
-    function exportNotes() {
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(notes));
-        const downloadAnchorNode = document.createElement('a');
-        downloadAnchorNode.setAttribute("href", dataStr);
-        downloadAnchorNode.setAttribute("download", "my_notes.json");
-        document.body.appendChild(downloadAnchorNode);
-        downloadAnchorNode.click();
-        downloadAnchorNode.remove();
-    }
-
-    function editMode() {
-        const n = notes.find(n => n.id === currentId);
-        document.getElementById('contentArea').innerHTML = `
-            <input type="text" id="editTitle" value="${n.title}" style="width:100%; padding:10px;">
-            <textarea id="editContent" style="width:100%; padding:10px; margin-top:10px;" rows="10">${n.content}</textarea>
-            <input type="file" id="imgUpload" accept="image/*">
-            <br>
-            <button class="btn" style="background:#27ae60" onclick="saveEdit()">保存更新</button>`;
-    }
-
-    function saveEdit() {
-        const title = document.getElementById('editTitle').value;
-        const content = document.getElementById('editContent').value;
-        const file = document.getElementById('imgUpload').files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = e => { updateData(title, content, e.target.result); };
-            reader.readAsDataURL(file);
-        } else { updateData(title, content, notes.find(n => n.id === currentId).img); }
-    }
-
-    function updateData(title, content, img) {
-        notes = notes.map(n => n.id === currentId ? {...n, title, content, img} : n);
-        localStorage.setItem('ueNotes', JSON.stringify(notes));
-        viewNote(currentId); render();
-    }
-
-    function newNote() {
-        const title = prompt("请输入标题：");
-        if (!title) return;
-        const newN = { id: Date.now(), title, content: "...", img: "", isPinned: false };
-        notes.push(newN);
-        localStorage.setItem('ueNotes', JSON.stringify(notes));
-        render(); viewNote(newN.id);
-    }
-
-    function deleteNote(id) {
-        if(confirm("确定删除？")) {
-            notes = notes.filter(n => n.id !== id);
-            localStorage.setItem('ueNotes', JSON.stringify(notes));
-            render();
-            document.getElementById('contentArea').innerHTML = "<h2>已删除</h2>";
+    <script>
+        // 核心：从你的 GitHub 仓库实时读取 data.json
+        async function loadNotes() {
+            const res = await fetch('data.json?t=' + new Date().getTime()); // 加上时间戳防止缓存
+            const notes = await res.json();
+            renderList(notes);
         }
-    }
-    render();
-</script>
+
+        function renderList(notes) {
+            const list = document.getElementById('list');
+            list.innerHTML = notes.map(n => `<div onclick="view(${n.id})" style="cursor:pointer; padding:10px;">${n.title}</div>`).join('');
+            window.allNotes = notes;
+        }
+
+        function view(id) {
+            const n = allNotes.find(item => item.id === id);
+            document.getElementById('display').innerHTML = `<h2>${n.title}</h2><p>${n.content}</p>`;
+        }
+
+        loadNotes();
+    </script>
 </body>
 </html>
