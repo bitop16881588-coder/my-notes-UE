@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>UE 高效知识库 (已配置版)</title>
+    <title>UE 高效知识库 (图片同步版)</title>
     <style>
         body { font-family: 'Microsoft JhengHei', sans-serif; display: flex; height: 100vh; margin: 0; background: #f0f2f5; }
         #sidebar { width: 320px; background: #2c3e50; color: white; display: flex; flex-direction: column; height: 100%; box-shadow: 2px 0 5px rgba(0,0,0,0.1); }
@@ -21,6 +21,7 @@
     <div class="sidebar-header">📂 UE 知识库
         <button onclick="newNote()" class="btn" style="background:#1abc9c">+ 新增</button>
         <button onclick="syncToCloud()" class="btn" style="background:#f39c12">云同步</button>
+        <button onclick="pullFromCloud()" class="btn" style="background:#3498db">刷新</button>
     </div>
     <div id="noteList"></div>
 </div>
@@ -35,49 +36,48 @@
 <script>
     let notes = JSON.parse(localStorage.getItem('ueNotes')) || [];
     let currentId = null;
+    const GITHUB_CONFIG = {
+        token: "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",
+        owner: "bitop16881588",
+        repo: "bitop16881588-coder",
+        path: "data.json"
+    };
 
-    // --- 同步逻辑 ---
-    async function syncToCloud() {
-        const token = "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";
-        const owner = "bitop16881588";
-        const repo = "bitop16881588-coder";
-        
+    // 1. 同步逻辑 (Pull & Push)
+    async function pullFromCloud() {
         try {
-            // 获取 SHA
-            const getRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/data.json`, { headers: { "Authorization": `token ${token}` }});
-            const fileData = await getRes.json();
-            
-            // 提交更新
-            const putRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/data.json`, {
-                method: 'PUT',
-                headers: { "Authorization": `token ${token}`, "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    message: "Sync Notes",
-                    content: btoa(unescape(encodeURIComponent(JSON.stringify(notes)))),
-                    sha: fileData.sha
-                })
-            });
-            if(putRes.ok) alert("✅ 同步成功！");
-            else alert("❌ 同步失败，请检查仓库是否存在 data.json");
-        } catch(e) { alert("出错啦：" + e); }
+            const res = await fetch(`https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${GITHUB_CONFIG.path}?t=${Date.now()}`, { headers: { "Authorization": `token ${GITHUB_CONFIG.token}` }});
+            const file = await res.json();
+            notes = JSON.parse(decodeURIComponent(escape(atob(file.content))));
+            localStorage.setItem('ueNotes', JSON.stringify(notes));
+            render(); alert("✅ 已读取最新云端笔记！");
+        } catch(e) { alert("读取失败，请检查 data.json 是否存在。"); }
     }
 
-    // --- 基础逻辑 (渲染、编辑、删除) ---
-    function render() {
-        notes.sort((a, b) => (b.isPinned - a.isPinned));
-        document.getElementById('noteList').innerHTML = notes.map(n => `
-            <div class="note-item" onclick="viewNote(${n.id})">
-                <strong>${n.isPinned ? '📌 ' : ''}${n.title}</strong>
-            </div>`).join('');
+    async function syncToCloud() {
+        const getRes = await fetch(`https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${GITHUB_CONFIG.path}`, { headers: { "Authorization": `token ${GITHUB_CONFIG.token}` }});
+        const fileData = await getRes.json();
+        await fetch(`https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${GITHUB_CONFIG.path}`, {
+            method: 'PUT',
+            headers: { "Authorization": `token ${GITHUB_CONFIG.token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+                message: "Sync Notes with Images",
+                content: btoa(unescape(encodeURIComponent(JSON.stringify(notes)))),
+                sha: fileData.sha
+            })
+        });
+        alert("✅ 云同步成功！");
     }
 
+    // 2. 界面与图片上传逻辑
     function viewNote(id) {
         currentId = id;
         const n = notes.find(n => n.id === id);
         document.getElementById('contentArea').innerHTML = `
             <h2>${n.title}</h2>
             <p style="white-space:pre-wrap;">${n.content}</p>
-            <br><button class="btn" style="background:#f39c12" onclick="togglePin()">置顶</button>
+            ${n.img ? `<img src="${n.img}" style="max-width:100%; border-radius:8px; margin-top:10px;">` : ''}
+            <br><button class="btn" style="background:#f39c12" onclick="togglePin()">置顶/取消</button>
             <button class="btn" style="background:#3498db" onclick="editMode()">编辑</button>
             <button class="btn" style="background:#e74c3c" onclick="deleteNote()">删除</button>`;
     }
@@ -86,42 +86,21 @@
         const n = notes.find(n => n.id === currentId);
         document.getElementById('contentArea').innerHTML = `
             <input type="text" id="editTitle" value="${n.title}" style="width:100%; padding:10px;">
-            <textarea id="editContent" rows="10" style="width:100%; padding:10px; margin-top:10px;">${n.content}</textarea>
+            <textarea id="editContent" rows="8" style="width:100%; padding:10px; margin-top:10px;">${n.content}</textarea>
+            <input type="file" id="imgUpload" accept="image/*" style="margin-top:10px;">
             <br><button class="btn" style="background:#27ae60" onclick="saveEdit()">保存</button>`;
     }
 
     function saveEdit() {
         const title = document.getElementById('editTitle').value;
         const content = document.getElementById('editContent').value;
-        notes = notes.map(n => n.id === currentId ? {...n, title, content} : n);
-        localStorage.setItem('ueNotes', JSON.stringify(notes));
-        render(); viewNote(currentId);
+        const file = document.getElementById('imgUpload').files[0];
+        
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = e => updateData(title, content, e.target.result);
+            reader.readAsDataURL(file);
+        } else updateData(title, content, notes.find(n => n.id === currentId).img);
     }
 
-    function newNote() {
-        const title = prompt("标题:");
-        if (!title) return;
-        notes.push({ id: Date.now(), title, content: "...", isPinned: false });
-        localStorage.setItem('ueNotes', JSON.stringify(notes));
-        render();
-    }
-
-    function togglePin() {
-        notes = notes.map(n => n.id === currentId ? {...n, isPinned: !n.isPinned} : n);
-        localStorage.setItem('ueNotes', JSON.stringify(notes));
-        render(); viewNote(currentId);
-    }
-
-    function deleteNote() {
-        if(confirm("确定删除？")) {
-            notes = notes.filter(n => n.id !== currentId);
-            localStorage.setItem('ueNotes', JSON.stringify(notes));
-            render();
-            document.getElementById('contentArea').innerHTML = "<h2>已删除</h2>";
-        }
-    }
-
-    render();
-</script>
-</body>
-</html>
+    function updateData(
