@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>UE 工作手册</title>
+    <style>
+        body { font-family: 'Microsoft JhengHei', sans-serif; display: flex; margin: 0; background: #f4f7f6; }
+        #sidebar { width: 300px; background: #2c3e50; color: white; height: 100vh; padding: 20px; overflow-y: auto; position: fixed; }
+        #main { margin-left: 340px; padding: 40px; width: calc(100% - 400px); }
+        .card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .search-box { width: 100%; padding: 10px; margin-bottom: 20px; box-sizing: border-box; }
+        .nav-link { color: #3498db; cursor: pointer; padding: 8px 0; border-bottom: 1px solid #3e5871; display: block; }
+        .nav-link:hover { color: #1abc9c; }
+    </style>
+</head>
+<body>
+
+<div id="sidebar">
+    <h3>UE 笔记中心</h3>
+    <input type="text" id="search" class="search-box" placeholder="搜索关键词..." oninput="filterNotes()">
+    <div id="noteList"></div>
+</div>
+
+<div id="main">
+    <div id="displayArea" class="card">
+        <h2>欢迎使用 UE 笔记</h2>
+        <p>请从左侧选择一个笔记标题进行查看。</p>
+    </div>
+</div>
+
+<script>
+    // 你的所有笔记资料都放在这里 (你可以随时在这里修改/增加内容)
+    const notes = [
+        { title: "主交接流程", content: "9:00前检查内部 WF 全关，JJ 全开。剩余操作请查看飞机会议记录。" },
+        { title: "三方开关说明", content: "WF系列：充值/提现关闭；JJ系列：充值/提现开启。" },
+        { title: "罐头语：追款", content: "请提供截图，我们将为您提交追款处理，请勿重复打款。" },
+        { title: "异常处理", content: "如遇单号不存在，请先核对商户 ID 和三方后台反馈。" }
+    ];
+
+    function render(data) {
+        const list = document.getElementById('noteList');
+        list.innerHTML = data.map(n => `<div class="nav-link" onclick="show('${n.title}')">📄 ${n.title}</div>`).join('');
+    }
+
+    function show(title) {
+        const note = notes.find(n => n.title === title);
+        document.getElementById('displayArea').innerHTML = `<h2>${note.title}</h2><p style="white-space:pre-wrap;">${note.content}</p>`;
+    }
+
+    function filterNotes() {
+        const q = document.getElementById('search').value;
+        const filtered = notes.filter(n => n.title.includes(q) || n.content.includes(q));
+        render(filtered);
+    }
+
+    render(notes);
+</script>
+</body>
+</html>
