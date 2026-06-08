@@ -2,47 +2,55 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>UE 管理员笔记系统</title>
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
-
-        // !!! 填入你在 Firebase 申请的配置 !!!
-        const firebaseConfig = { apiKey: "...", projectId: "...", ... };
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-
-        // 实时渲染
-        onSnapshot(query(collection(db, "notes"), orderBy("isPinned", "desc")), (snapshot) => {
-            const list = document.getElementById('list');
-            list.innerHTML = "";
-            snapshot.forEach(doc => {
-                const n = doc.data();
-                list.innerHTML += `
-                    <div class="note-item" onclick="view('${doc.id}')">
-                        ${n.isPinned ? '📌 ' : ''}${n.title}
-                    </div>`;
-            });
-        });
-
-        // 管理功能：新增
-        window.saveNote = async () => {
-            const title = document.getElementById('newTitle').value;
-            const content = document.getElementById('newContent').value;
-            await addDoc(collection(db, "notes"), { title, content, isPinned: false });
-        };
-    </script>
+    <title>UE 多人协作笔记</title>
+    <style>
+        body { font-family: 'Microsoft JhengHei', sans-serif; display: flex; height: 100vh; margin: 0; background: #f4f7f6; }
+        #sidebar { width: 320px; background: #2c3e50; color: white; display: flex; flex-direction: column; height: 100%; }
+        .header { padding: 20px; background: #1a252f; font-weight: bold; border-bottom: 2px solid #1abc9c; }
+        #list { flex: 1; overflow-y: auto; }
+        .note-item { padding: 15px; border-bottom: 1px solid #34495e; cursor: pointer; transition: 0.3s; }
+        .note-item:hover { background: #34495e; }
+        #main { flex: 1; padding: 40px; overflow-y: auto; }
+        .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        .search-box { width: 90%; margin: 10px; padding: 8px; border-radius: 4px; border: none; }
+    </style>
 </head>
 <body>
     <div id="sidebar">
-        <div class="header">📂 UE 管理后台</div>
-        <div id="list"></div>
-        <div style="padding:10px;">
-            <input id="newTitle" placeholder="标题"><br>
-            <textarea id="newContent" placeholder="内容"></textarea><br>
-            <button onclick="saveNote()">发布新笔记</button>
+        <div class="header">📂 UE 知识库
+            <input type="text" id="search" class="search-box" placeholder="搜索..." oninput="filterNotes()">
         </div>
+        <div id="list"></div>
     </div>
-    <div id="main"><div id="display" class="card">请选择笔记</div></div>
+    <div id="main">
+        <div id="display" class="card"><h2>欢迎使用</h2><p>请从左侧选择笔记。</p></div>
+    </div>
+
+    <script>
+        let allNotes = [];
+        async function loadNotes() {
+            const res = await fetch('data.json?t=' + new Date().getTime());
+            allNotes = await res.json();
+            renderList(allNotes);
+        }
+        function renderList(notes) {
+            // 排序：置顶的在前
+            notes.sort((a,b) => (b.isPinned - a.isPinned));
+            document.getElementById('list').innerHTML = notes.map(n => `
+                <div class="note-item" onclick="view(${n.id})">
+                    ${n.isPinned ? '📌 ' : ''}${n.title}
+                </div>`).join('');
+        }
+        function filterNotes() {
+            const q = document.getElementById('search').value;
+            const filtered = allNotes.filter(n => n.title.includes(q) || n.content.includes(q));
+            renderList(filtered);
+        }
+        function view(id) {
+            const n = allNotes.find(item => item.id === id);
+            document.getElementById('display').innerHTML = `<h2>${n.title}</h2><p style="white-space:pre-wrap;">${n.content}</p>`;
+        }
+        loadNotes();
+    </script>
 </body>
 </html>
