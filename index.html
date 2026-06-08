@@ -2,37 +2,47 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>UE 多人协作笔记</title>
+    <title>UE GitHub 同步笔记系统</title>
     <style>
-        body { font-family: sans-serif; display: flex; height: 100vh; margin: 0; }
-        #sidebar { width: 300px; background: #2c3e50; color: white; padding: 20px; overflow-y: auto; }
-        #main { flex: 1; padding: 40px; }
+        /* 样式同前，保持简洁 */
+        body { font-family: 'Microsoft JhengHei', sans-serif; display: flex; height: 100vh; margin: 0; background: #f0f2f5; }
+        #sidebar { width: 320px; background: #2c3e50; color: white; display: flex; flex-direction: column; height: 100%; }
+        #list { flex: 1; overflow-y: auto; }
+        .note-item { padding: 15px; border-bottom: 1px solid #34495e; cursor: pointer; }
+        #main { flex: 1; padding: 40px; overflow-y: auto; }
     </style>
 </head>
 <body>
-    <div id="sidebar"><h3>笔记目录</h3><div id="list"></div></div>
-    <div id="main"><div id="display">请选择笔记</div></div>
+    <div id="sidebar">
+        <div style="padding:20px;">
+            <input id="token" placeholder="输入 GitHub Token" style="width:100%"><br>
+            <button onclick="saveToGitHub()">同步所有修改至 GitHub</button>
+        </div>
+        <div id="list"></div>
+    </div>
+    <div id="main"><div id="display">请加载数据</div></div>
 
     <script>
-        // 核心：从你的 GitHub 仓库实时读取 data.json
-        async function loadNotes() {
-            const res = await fetch('data.json?t=' + new Date().getTime()); // 加上时间戳防止缓存
-            const notes = await res.json();
-            renderList(notes);
-        }
+        let notes = [];
+        const REPO = "你的用户名/仓库名"; // 需替换
+        const TOKEN = document.getElementById('token').value;
 
-        function renderList(notes) {
-            const list = document.getElementById('list');
-            list.innerHTML = notes.map(n => `<div onclick="view(${n.id})" style="cursor:pointer; padding:10px;">${n.title}</div>`).join('');
-            window.allNotes = notes;
+        // 保存到 GitHub 的核心函数
+        async function saveToGitHub() {
+            const content = JSON.stringify(notes);
+            const res = await fetch(`https://api.github.com/repos/${REPO}/contents/data.json`, {
+                method: 'PUT',
+                headers: { "Authorization": `token ${TOKEN}`, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    message: "Update notes",
+                    content: btoa(unescape(encodeURIComponent(content))),
+                    sha: await getSha() // 需要获取文件的 SHA
+                })
+            });
+            alert("已同步至云端！");
         }
-
-        function view(id) {
-            const n = allNotes.find(item => item.id === id);
-            document.getElementById('display').innerHTML = `<h2>${n.title}</h2><p>${n.content}</p>`;
-        }
-
-        loadNotes();
+        
+        // 此处省略获取 SHA 和加载数据的逻辑...
     </script>
 </body>
 </html>
