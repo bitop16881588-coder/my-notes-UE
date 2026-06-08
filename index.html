@@ -2,47 +2,47 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>UE GitHub 同步笔记系统</title>
-    <style>
-        /* 样式同前，保持简洁 */
-        body { font-family: 'Microsoft JhengHei', sans-serif; display: flex; height: 100vh; margin: 0; background: #f0f2f5; }
-        #sidebar { width: 320px; background: #2c3e50; color: white; display: flex; flex-direction: column; height: 100%; }
-        #list { flex: 1; overflow-y: auto; }
-        .note-item { padding: 15px; border-bottom: 1px solid #34495e; cursor: pointer; }
-        #main { flex: 1; padding: 40px; overflow-y: auto; }
-    </style>
+    <title>UE 管理员笔记系统</title>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
+        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
+
+        // !!! 填入你在 Firebase 申请的配置 !!!
+        const firebaseConfig = { apiKey: "...", projectId: "...", ... };
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // 实时渲染
+        onSnapshot(query(collection(db, "notes"), orderBy("isPinned", "desc")), (snapshot) => {
+            const list = document.getElementById('list');
+            list.innerHTML = "";
+            snapshot.forEach(doc => {
+                const n = doc.data();
+                list.innerHTML += `
+                    <div class="note-item" onclick="view('${doc.id}')">
+                        ${n.isPinned ? '📌 ' : ''}${n.title}
+                    </div>`;
+            });
+        });
+
+        // 管理功能：新增
+        window.saveNote = async () => {
+            const title = document.getElementById('newTitle').value;
+            const content = document.getElementById('newContent').value;
+            await addDoc(collection(db, "notes"), { title, content, isPinned: false });
+        };
+    </script>
 </head>
 <body>
     <div id="sidebar">
-        <div style="padding:20px;">
-            <input id="token" placeholder="输入 GitHub Token" style="width:100%"><br>
-            <button onclick="saveToGitHub()">同步所有修改至 GitHub</button>
-        </div>
+        <div class="header">📂 UE 管理后台</div>
         <div id="list"></div>
+        <div style="padding:10px;">
+            <input id="newTitle" placeholder="标题"><br>
+            <textarea id="newContent" placeholder="内容"></textarea><br>
+            <button onclick="saveNote()">发布新笔记</button>
+        </div>
     </div>
-    <div id="main"><div id="display">请加载数据</div></div>
-
-    <script>
-        let notes = [];
-        const REPO = "你的用户名/仓库名"; // 需替换
-        const TOKEN = document.getElementById('token').value;
-
-        // 保存到 GitHub 的核心函数
-        async function saveToGitHub() {
-            const content = JSON.stringify(notes);
-            const res = await fetch(`https://api.github.com/repos/${REPO}/contents/data.json`, {
-                method: 'PUT',
-                headers: { "Authorization": `token ${TOKEN}`, "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    message: "Update notes",
-                    content: btoa(unescape(encodeURIComponent(content))),
-                    sha: await getSha() // 需要获取文件的 SHA
-                })
-            });
-            alert("已同步至云端！");
-        }
-        
-        // 此处省略获取 SHA 和加载数据的逻辑...
-    </script>
+    <div id="main"><div id="display" class="card">请选择笔记</div></div>
 </body>
 </html>
