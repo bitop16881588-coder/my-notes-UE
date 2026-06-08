@@ -2,19 +2,36 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>UE 高效知识库</title>
     <style>
         body { font-family: 'Microsoft JhengHei', sans-serif; display: flex; height: 100vh; margin: 0; background: #f8f9fa; }
         /* 左侧管理区 */
         #sidebar { width: 350px; background: #2c3e50; color: white; display: flex; flex-direction: column; }
-        .toolbar { padding: 15px; background: #1a252f; border-bottom: 2px solid #1abc9c; display: flex; gap: 5px; }
+        .toolbar { padding: 15px; background: #1a252f; border-bottom: 2px solid #1abc9c; display: flex; gap: 5px; flex-wrap: wrap; }
+        #syncStatus { font-size: 11px; color: #9fb3c8; padding: 8px 15px; border-bottom: 1px solid #3e4f5f; }
         #noteList { flex: 1; overflow-y: auto; }
         .note-item { padding: 15px; border-bottom: 1px solid #3e4f5f; cursor: pointer; transition: 0.2s; display: flex; justify-content: space-between; }
         .note-item:hover { background: #34495e; }
         /* 右侧展示区 */
-        #main { flex: 1; padding: 50px; overflow-y: auto; }
+        #main { flex: 1; padding: 30px 50px 50px; overflow-y: auto; }
+        /* 云端搜寻栏 */
+        #searchBar { display: flex; gap: 8px; align-items: center; background: white; border: 1px solid #e1e5ea;
+            border-radius: 10px; padding: 8px 8px 8px 16px; box-shadow: 0 4px 14px rgba(0,0,0,0.05); margin-bottom: 24px; }
+        #searchBar input { flex: 1; border: 0; outline: none; font-size: 15px; font-family: inherit; color: #2c3e50; padding: 8px 0; }
+        #searchBar .lbl { font-size: 12px; color: #95a5a6; white-space: nowrap; }
         .card { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); }
         .btn { padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; color: white; font-size: 12px; }
+        /* 搜寻结果 */
+        .s-row { display: flex; align-items: center; gap: 14px; text-decoration: none; color: #2c3e50;
+            padding: 13px 14px; border: 1px solid #eef1f4; border-radius: 10px; margin-bottom: 8px; transition: 0.15s; }
+        .s-row:hover { border-color: #1abc9c; background: #f7fbfa; }
+        .s-ic { flex: none; width: 38px; height: 38px; border-radius: 9px; display: grid; place-items: center; font-size: 19px; background: #eef6f4; }
+        .s-meta { flex: 1; min-width: 0; }
+        .s-nm { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .s-sub { font-size: 12px; color: #7f8c8d; margin-top: 3px; display: flex; gap: 10px; flex-wrap: wrap; }
+        .s-sub .tag { color: #16a085; }
+        .s-empty { color: #95a5a6; text-align: center; padding: 40px 0; }
     </style>
 </head>
 <body>
@@ -25,47 +42,205 @@
         <button onclick="syncToCloud()" class="btn" style="background:#f39c12">云同步</button>
         <button onclick="pullFromCloud()" class="btn" style="background:#3498db">刷新</button>
     </div>
+    <div id="syncStatus">尚未登入 Google</div>
     <div id="noteList"></div>
 </div>
 
 <div id="main">
+    <div id="searchBar">
+        <span class="lbl">🔍 搜云端</span>
+        <input id="q" type="text" placeholder="输入关键字搜你 Google Drive 的档名与内容…　按 Enter" autocomplete="off">
+        <button class="btn" style="background:#2c3e50;padding:9px 16px;font-size:13px" onclick="searchDrive()">搜寻</button>
+    </div>
     <div id="contentArea" class="card">
         <h2>歡迎使用 UE 知識庫</h2>
-        <p>左側點選笔记即可讀取或編輯。</p>
+        <p>左側點選笔记即可讀取或編輯；上方搜尋欄可搜尋你 Google Drive 裡的檔案與內容。第一次使用會請你登入 Google。</p>
     </div>
 </div>
 
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
     let notes = JSON.parse(localStorage.getItem('ueNotes')) || [];
     let currentId = null;
-    const GITHUB_CONFIG = {
-        token: "",  // 请勿在此处放置 token
-        owner: "bitop16881588",
-        repo: "bitop16881588-coder",
-        path: "data.json"
-    };
 
-    // 1. 同步逻辑
-    async function pullFromCloud() {
-        const res = await fetch(`https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${GITHUB_CONFIG.path}?t=${Date.now()}`, { headers: { "Authorization": `token ${GITHUB_CONFIG.token}` }});
-        const file = await res.json();
-        notes = JSON.parse(decodeURIComponent(escape(atob(file.content))));
-        localStorage.setItem('ueNotes', JSON.stringify(notes));
-        render(); alert("✅ 数据已同步！");
+    /* ===== Google 设定：只用可公开的 Client ID，没有任何密钥 ===== */
+    const CLIENT_ID = "460796542989-k785gtt8fod50ivj808b7h3le7s4rvnd.apps.googleusercontent.com";
+    // 同时请求：唯读全部（搜寻用）+ 只碰自己建立的档（笔记同步用）
+    const SCOPE = "https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file";
+    const DATA_FILENAME = "ue-notes-data.json";
+
+    let accessToken = null;
+    let tokenClient = null;
+    let dataFileId = null;
+    let pendingAction = null;
+    let pendingQuery = "";
+
+    function setStatus(t){ const s = document.getElementById('syncStatus'); if (s) s.textContent = t; }
+
+    window.addEventListener('load', () => {
+        const timer = setInterval(() => {
+            if (window.google && google.accounts && google.accounts.oauth2) {
+                clearInterval(timer);
+                tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: CLIENT_ID,
+                    scope: SCOPE,
+                    callback: (resp) => {
+                        if (resp.error) { setStatus("登入失敗：" + resp.error); pendingAction = null; return; }
+                        accessToken = resp.access_token;
+                        setStatus("已登入 Google Drive");
+                        const act = pendingAction; pendingAction = null;
+                        if (act === 'sync') doSync();
+                        else if (act === 'pull') doPull();
+                        else if (act === 'search') doSearch(pendingQuery);
+                    },
+                });
+            }
+        }, 200);
+    });
+
+    function ensureToken(action) {
+        if (accessToken) return true;
+        if (!tokenClient) { alert("Google 登入元件還在載入，請稍候再試。"); return false; }
+        pendingAction = action;
+        tokenClient.requestAccessToken({ prompt: 'consent' });
+        return false;
     }
 
-    async function syncToCloud() {
-        const getRes = await fetch(`https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${GITHUB_CONFIG.path}`, { headers: { "Authorization": `token ${GITHUB_CONFIG.token}` }});
-        const fileData = await getRes.json();
-        await fetch(`https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${GITHUB_CONFIG.path}`, {
-            method: 'PUT',
-            headers: { "Authorization": `token ${GITHUB_CONFIG.token}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ message: "Sync", content: btoa(unescape(encodeURIComponent(JSON.stringify(notes)))), sha: fileData.sha })
+    /* ============ 云端搜寻（drive.readonly，搜档名 + 内容）============ */
+    function searchDrive() {
+        const kw = document.getElementById('q').value.trim();
+        if (!kw) { return; }
+        pendingQuery = kw;
+        if (ensureToken('search')) doSearch(kw);
+    }
+
+    async function doSearch(query) {
+        query = (query || '').trim();
+        if (!query) return;
+        const area = document.getElementById('contentArea');
+        area.innerHTML = '<h2>搜尋中…</h2>';
+        const safe = query.replace(/'/g, "\\'");
+        const q = `(name contains '${safe}' or fullText contains '${safe}') and trashed = false`;
+        const params = new URLSearchParams({
+            q,
+            pageSize: "40",
+            fields: "files(id,name,mimeType,modifiedTime,webViewLink,size)",
+            orderBy: "modifiedTime desc",
+            corpora: "user",
+            spaces: "drive",
         });
-        alert("✅ 云同步完成！");
+        try {
+            const r = await fetch("https://www.googleapis.com/drive/v3/files?" + params.toString(),
+                { headers: { Authorization: 'Bearer ' + accessToken } });
+            if (r.status === 401) { accessToken = null; area.innerHTML = '<h2>登入已過期</h2><p>請再按一次「搜尋」重新登入。</p>'; return; }
+            if (r.status === 403) { area.innerHTML = '<h2>權限不足（403）</h2><p>請確認 Drive API 已啟用、且授權範圍包含 drive.readonly。</p>'; return; }
+            if (!r.ok) { area.innerHTML = '<h2>搜尋失敗（HTTP ' + r.status + '）</h2>'; return; }
+            const data = await r.json();
+            renderResults(query, data.files || []);
+        } catch (e) {
+            area.innerHTML = '<h2>發生錯誤</h2><p>' + esc(e.message) + '</p>';
+        }
     }
 
-    // 2. 核心功能
+    function renderResults(query, files) {
+        const area = document.getElementById('contentArea');
+        let html = '<h2 style="margin-top:0">搜尋「' + esc(query) + '」</h2>';
+        if (!files.length) {
+            html += '<div class="s-empty">🗂️ 找不到符合的檔案</div>';
+            area.innerHTML = html; return;
+        }
+        html += '<p style="color:#7f8c8d;font-size:13px">共 ' + files.length + ' 筆（依修改時間排序）</p>';
+        html += files.map(f => `
+            <a class="s-row" href="${f.webViewLink || '#'}" target="_blank" rel="noopener">
+                <div class="s-ic">${icon(f.mimeType)}</div>
+                <div class="s-meta">
+                    <div class="s-nm">${esc(f.name)}</div>
+                    <div class="s-sub">
+                        <span class="tag">${label(f.mimeType)}</span>
+                        <span>${fmtDate(f.modifiedTime)}</span>
+                        ${f.size ? '<span>' + fmtSize(f.size) + '</span>' : ''}
+                    </div>
+                </div>
+            </a>`).join('');
+        area.innerHTML = html;
+    }
+
+    function icon(m){ if(!m)return"📄"; if(m.includes("folder"))return"📁"; if(m.includes("document"))return"📝";
+        if(m.includes("spreadsheet"))return"📊"; if(m.includes("presentation"))return"📽️"; if(m==="application/pdf")return"📕";
+        if(m.startsWith("image/"))return"🖼️"; if(m.startsWith("video/"))return"🎬"; if(m.startsWith("audio/"))return"🎵"; return"📄"; }
+    function label(m){ if(!m)return"檔案"; if(m.includes("folder"))return"資料夾"; if(m.includes("document"))return"Google 文件";
+        if(m.includes("spreadsheet"))return"Google 試算表"; if(m.includes("presentation"))return"Google 簡報"; if(m==="application/pdf")return"PDF";
+        if(m.startsWith("image/"))return"圖片"; if(m.startsWith("video/"))return"影片"; return"檔案"; }
+    function fmtDate(s){ if(!s)return""; const d=new Date(s); return d.getFullYear()+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+String(d.getDate()).padStart(2,"0"); }
+    function fmtSize(b){ b=+b; if(!b)return""; const u=["B","KB","MB","GB"]; let i=0; while(b>=1024&&i<u.length-1){b/=1024;i++;} return b.toFixed(b<10&&i>0?1:0)+u[i]; }
+    function esc(s){ return (s||"").replace(/[&<>"']/g,c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
+
+    /* ============ 笔记同步到 Google Drive（drive.file）============ */
+    async function findDataFile() {
+        if (dataFileId) return dataFileId;
+        const q = encodeURIComponent(`name='${DATA_FILENAME}' and trashed=false`);
+        const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&spaces=drive&fields=files(id,name)`,
+            { headers: { Authorization: 'Bearer ' + accessToken } });
+        if (r.status === 401) { accessToken = null; throw { code: 401 }; }
+        if (!r.ok) throw new Error('查詢檔案失敗 HTTP ' + r.status);
+        const d = await r.json();
+        if (d.files && d.files.length) dataFileId = d.files[0].id;
+        return dataFileId;
+    }
+
+    function syncToCloud(){ if (ensureToken('sync')) doSync(); }
+    async function doSync() {
+        try {
+            setStatus("同步中…");
+            const body = JSON.stringify(notes);
+            let id = await findDataFile();
+            let r;
+            if (id) {
+                r = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${id}?uploadType=media`,
+                    { method: 'PATCH', headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' }, body });
+            } else {
+                const boundary = 'ueb' + Date.now();
+                const meta = { name: DATA_FILENAME, mimeType: 'application/json' };
+                const multipart =
+                    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n` +
+                    `--${boundary}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${boundary}--`;
+                r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',
+                    { method: 'POST', headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'multipart/related; boundary=' + boundary }, body: multipart });
+                if (r.ok) { const d = await r.json(); dataFileId = d.id; }
+            }
+            if (r.status === 401) { accessToken = null; setStatus("登入過期"); alert("登入已過期，請再按一次「云同步」。"); return; }
+            if (!r.ok) { console.error(await r.text()); setStatus("同步失敗 HTTP " + r.status); alert("❌ 同步失敗（HTTP " + r.status + "）"); return; }
+            localStorage.setItem('ueNotes', JSON.stringify(notes));
+            setStatus("已同步到 Google Drive ✓");
+            alert("✅ 云同步完成！（已存到你的 Google Drive）");
+        } catch (e) {
+            if (e && e.code === 401) { setStatus("登入過期"); alert("登入已過期，請再按一次「云同步」。"); return; }
+            setStatus("同步錯誤"); alert("同步發生錯誤：" + (e.message || e));
+        }
+    }
+
+    function pullFromCloud(){ if (ensureToken('pull')) doPull(); }
+    async function doPull() {
+        try {
+            setStatus("讀取中…");
+            const id = await findDataFile();
+            if (!id) { setStatus("雲端尚無資料"); alert("雲端還沒有資料（你還沒同步過）。"); return; }
+            const r = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`,
+                { headers: { Authorization: 'Bearer ' + accessToken } });
+            if (r.status === 401) { accessToken = null; setStatus("登入過期"); alert("登入已過期，請再按一次「刷新」。"); return; }
+            if (!r.ok) { setStatus("讀取失敗 HTTP " + r.status); alert("❌ 讀取失敗（HTTP " + r.status + "）"); return; }
+            notes = await r.json();
+            localStorage.setItem('ueNotes', JSON.stringify(notes));
+            render();
+            setStatus("已從 Google Drive 載入 ✓");
+            alert("✅ 数据已同步！");
+        } catch (e) {
+            if (e && e.code === 401) { setStatus("登入過期"); alert("登入已過期，請再按一次「刷新」。"); return; }
+            setStatus("讀取錯誤"); alert("讀取發生錯誤：" + (e.message || e));
+        }
+    }
+
+    /* ============ 笔记核心功能（逻辑未更动）============ */
     function render() {
         notes.sort((a, b) => (b.isPinned - a.isPinned));
         document.getElementById('noteList').innerHTML = notes.map(n => `
@@ -137,6 +312,9 @@
             document.getElementById('contentArea').innerHTML = "<h2>已删除</h2>";
         }
     }
+
+    // Enter 键搜寻
+    document.getElementById('q').addEventListener('keydown', e => { if (e.key === 'Enter') searchDrive(); });
 
     render();
 </script>
