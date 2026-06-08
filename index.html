@@ -2,24 +2,26 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>UE 高效知识库 (图片同步版)</title>
+    <title>UE 高效知识库</title>
     <style>
-        body { font-family: 'Microsoft JhengHei', sans-serif; display: flex; height: 100vh; margin: 0; background: #f0f2f5; }
-        #sidebar { width: 320px; background: #2c3e50; color: white; display: flex; flex-direction: column; height: 100%; box-shadow: 2px 0 5px rgba(0,0,0,0.1); }
-        .sidebar-header { padding: 20px; background: #1a252f; border-bottom: 2px solid #1abc9c; }
-        #noteList { flex: 1; overflow-y: auto; padding: 10px; }
-        .note-item { padding: 12px; border-bottom: 1px solid #34495e; cursor: pointer; display: flex; justify-content: space-between; }
+        body { font-family: 'Microsoft JhengHei', sans-serif; display: flex; height: 100vh; margin: 0; background: #f8f9fa; }
+        /* 左侧管理区 */
+        #sidebar { width: 350px; background: #2c3e50; color: white; display: flex; flex-direction: column; }
+        .toolbar { padding: 15px; background: #1a252f; border-bottom: 2px solid #1abc9c; display: flex; gap: 5px; }
+        #noteList { flex: 1; overflow-y: auto; }
+        .note-item { padding: 15px; border-bottom: 1px solid #3e4f5f; cursor: pointer; transition: 0.2s; display: flex; justify-content: space-between; }
         .note-item:hover { background: #34495e; }
-        #main { flex: 1; padding: 40px; overflow-y: auto; }
-        .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
-        .btn { padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer; color: white; margin-top: 5px; font-size: 13px; }
+        /* 右侧展示区 */
+        #main { flex: 1; padding: 50px; overflow-y: auto; }
+        .card { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); }
+        .btn { padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; color: white; font-size: 12px; }
     </style>
 </head>
 <body>
 
 <div id="sidebar">
-    <div class="sidebar-header">📂 UE 知识库
-        <button onclick="newNote()" class="btn" style="background:#1abc9c">+ 新增</button>
+    <div class="toolbar">
+        <button onclick="newNote()" class="btn" style="background:#1abc9c">新建</button>
         <button onclick="syncToCloud()" class="btn" style="background:#f39c12">云同步</button>
         <button onclick="pullFromCloud()" class="btn" style="background:#3498db">刷新</button>
     </div>
@@ -28,8 +30,8 @@
 
 <div id="main">
     <div id="contentArea" class="card">
-        <h2>系统就绪</h2>
-        <p>点击左侧目录进行操作。</p>
+        <h2>歡迎使用 UE 知識庫</h2>
+        <p>左側點選笔记即可讀取或編輯。</p>
     </div>
 </div>
 
@@ -43,15 +45,13 @@
         path: "data.json"
     };
 
-    // 1. 同步逻辑 (Pull & Push)
+    // 1. 同步逻辑
     async function pullFromCloud() {
-        try {
-            const res = await fetch(`https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${GITHUB_CONFIG.path}?t=${Date.now()}`, { headers: { "Authorization": `token ${GITHUB_CONFIG.token}` }});
-            const file = await res.json();
-            notes = JSON.parse(decodeURIComponent(escape(atob(file.content))));
-            localStorage.setItem('ueNotes', JSON.stringify(notes));
-            render(); alert("✅ 已读取最新云端笔记！");
-        } catch(e) { alert("读取失败，请检查 data.json 是否存在。"); }
+        const res = await fetch(`https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${GITHUB_CONFIG.path}?t=${Date.now()}`, { headers: { "Authorization": `token ${GITHUB_CONFIG.token}` }});
+        const file = await res.json();
+        notes = JSON.parse(decodeURIComponent(escape(atob(file.content))));
+        localStorage.setItem('ueNotes', JSON.stringify(notes));
+        render(); alert("✅ 数据已同步！");
     }
 
     async function syncToCloud() {
@@ -60,42 +60,47 @@
         await fetch(`https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${GITHUB_CONFIG.path}`, {
             method: 'PUT',
             headers: { "Authorization": `token ${GITHUB_CONFIG.token}`, "Content-Type": "application/json" },
-            body: JSON.stringify({
-                message: "Sync Notes with Images",
-                content: btoa(unescape(encodeURIComponent(JSON.stringify(notes)))),
-                sha: fileData.sha
-            })
+            body: JSON.stringify({ message: "Sync", content: btoa(unescape(encodeURIComponent(JSON.stringify(notes)))), sha: fileData.sha })
         });
-        alert("✅ 云同步成功！");
+        alert("✅ 云同步完成！");
     }
 
-    // 2. 界面与图片上传逻辑
+    // 2. 核心功能
+    function render() {
+        notes.sort((a, b) => (b.isPinned - a.isPinned));
+        document.getElementById('noteList').innerHTML = notes.map(n => `
+            <div class="note-item" onclick="viewNote(${n.id})">
+                <span>${n.isPinned ? '📌 ' : ''}${n.title}</span>
+            </div>`).join('');
+    }
+
     function viewNote(id) {
         currentId = id;
         const n = notes.find(n => n.id === id);
         document.getElementById('contentArea').innerHTML = `
             <h2>${n.title}</h2>
-            <p style="white-space:pre-wrap;">${n.content}</p>
-            ${n.img ? `<img src="${n.img}" style="max-width:100%; border-radius:8px; margin-top:10px;">` : ''}
-            <br><button class="btn" style="background:#f39c12" onclick="togglePin()">置顶/取消</button>
-            <button class="btn" style="background:#3498db" onclick="editMode()">编辑</button>
-            <button class="btn" style="background:#e74c3c" onclick="deleteNote()">删除</button>`;
+            <p style="line-height:1.8;">${n.content}</p>
+            ${n.img ? `<img src="${n.img}" style="max-width:100%; border-radius:8px;">` : ''}
+            <div style="margin-top:30px;">
+                <button class="btn" style="background:#f39c12" onclick="togglePin()">置顶</button>
+                <button class="btn" style="background:#3498db" onclick="editMode()">编辑</button>
+                <button class="btn" style="background:#e74c3c" onclick="deleteNote()">删除</button>
+            </div>`;
     }
 
     function editMode() {
         const n = notes.find(n => n.id === currentId);
         document.getElementById('contentArea').innerHTML = `
-            <input type="text" id="editTitle" value="${n.title}" style="width:100%; padding:10px;">
-            <textarea id="editContent" rows="8" style="width:100%; padding:10px; margin-top:10px;">${n.content}</textarea>
-            <input type="file" id="imgUpload" accept="image/*" style="margin-top:10px;">
-            <br><button class="btn" style="background:#27ae60" onclick="saveEdit()">保存</button>`;
+            <input type="text" id="editTitle" value="${n.title}" style="width:100%; padding:10px; margin-bottom:10px;">
+            <textarea id="editContent" rows="10" style="width:100%; padding:10px;">${n.content}</textarea>
+            <input type="file" id="imgUpload" accept="image/*" style="margin:10px 0;">
+            <br><button class="btn" style="background:#27ae60" onclick="saveEdit()">保存内容</button>`;
     }
 
     function saveEdit() {
         const title = document.getElementById('editTitle').value;
         const content = document.getElementById('editContent').value;
         const file = document.getElementById('imgUpload').files[0];
-        
         if (file) {
             const reader = new FileReader();
             reader.onload = e => updateData(title, content, e.target.result);
@@ -103,4 +108,37 @@
         } else updateData(title, content, notes.find(n => n.id === currentId).img);
     }
 
-    function updateData(
+    function updateData(title, content, img) {
+        notes = notes.map(n => n.id === currentId ? {...n, title, content, img} : n);
+        localStorage.setItem('ueNotes', JSON.stringify(notes));
+        render(); viewNote(currentId);
+    }
+
+    function newNote() {
+        const title = prompt("标题:");
+        if (title) {
+            notes.push({ id: Date.now(), title, content: "...", img: "", isPinned: false });
+            localStorage.setItem('ueNotes', JSON.stringify(notes));
+            render();
+        }
+    }
+
+    function togglePin() {
+        notes = notes.map(n => n.id === currentId ? {...n, isPinned: !n.isPinned} : n);
+        localStorage.setItem('ueNotes', JSON.stringify(notes));
+        render(); viewNote(currentId);
+    }
+
+    function deleteNote() {
+        if(confirm("确定删除？")) {
+            notes = notes.filter(n => n.id !== currentId);
+            localStorage.setItem('ueNotes', JSON.stringify(notes));
+            render();
+            document.getElementById('contentArea').innerHTML = "<h2>已删除</h2>";
+        }
+    }
+
+    render();
+</script>
+</body>
+</html>
