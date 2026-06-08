@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>UE 笔记 - 专业版</title>
+    <style>
+        body { font-family: 'Microsoft JhengHei', sans-serif; display: flex; background: #f4f7f6; margin: 0; }
+        #sidebar { width: 300px; background: #2c3e50; color: white; height: 100vh; padding: 20px; overflow-y: auto; }
+        #main { flex: 1; padding: 40px; }
+        .card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .copy-btn { background: #3498db; color: white; border: none; padding: 8px; cursor: pointer; border-radius: 4px; margin-top: 10px; }
+        .tag { font-size: 0.8em; background: #95a5a6; padding: 2px 6px; border-radius: 4px; color: white; }
+    </style>
+</head>
+<body>
+    <div id="sidebar">
+        <h3>笔记目录</h3>
+        <input type="text" id="search" placeholder="输入关键词搜索..." oninput="filterNotes()">
+        <div id="list"></div>
+    </div>
+    <div id="main">
+        <div id="display" class="card"><h2>请选择笔记</h2></div>
+    </div>
+
+    <script>
+        let allNotes = [];
+        // 从云端读取 JSON
+        async function init() {
+            const res = await fetch('data.json'); 
+            allNotes = await res.json();
+            render(allNotes);
+        }
+
+        function render(notes) {
+            const list = document.getElementById('list');
+            list.innerHTML = notes.map(n => `<div onclick="show('${n.title}')" style="cursor:pointer; padding:10px 0;">
+                <span class="tag">${n.category}</span> ${n.title}</div>`).join('');
+        }
+
+        function show(title) {
+            const note = allNotes.find(n => n.title === title);
+            document.getElementById('display').innerHTML = `
+                <h2>${note.title}</h2>
+                <p style="white-space:pre-wrap;">${note.content}</p>
+                <button class="copy-btn" onclick="copyText('${note.content}')">一键复制内容</button>`;
+        }
+
+        function copyText(text) {
+            navigator.clipboard.writeText(text); alert("已复制！");
+        }
+
+        function filterNotes() {
+            const q = document.getElementById('search').value;
+            render(allNotes.filter(n => n.title.includes(q) || n.content.includes(q)));
+        }
+
+        init();
+    </script>
+</body>
+</html>
