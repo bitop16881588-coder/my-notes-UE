@@ -11,8 +11,22 @@
         .toolbar { padding: 15px; background: #1a252f; border-bottom: 2px solid #1abc9c; display: flex; gap: 5px; flex-wrap: wrap; }
         #syncStatus { font-size: 11px; color: #9fb3c8; padding: 8px 15px; border-bottom: 1px solid #3e4f5f; }
         #noteList { flex: 1; overflow-y: auto; }
-        .note-item { padding: 15px; border-bottom: 1px solid #3e4f5f; cursor: pointer; transition: 0.2s; display: flex; justify-content: space-between; }
+        .note-item { padding: 13px 15px 13px 26px; border-bottom: 1px solid #34404d; cursor: pointer; transition: 0.2s; display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
         .note-item:hover { background: #34495e; }
+        .note-item .pin { color: #f1c40f; }
+        /* 分类分组 */
+        .cat-group .cat-header { padding: 11px 15px; background: #23303d; color: #9fb3c8; font-size: 12px; font-weight: bold;
+            cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;
+            border-bottom: 1px solid #3e4f5f; letter-spacing: .5px; }
+        .cat-group .cat-header:hover { background: #2a3a49; color: #cfe0ee; }
+        .cat-group .cat-header.pinned { color: #f1c40f; }
+        .cat-group .cat-header .left { display: flex; align-items: center; gap: 8px; }
+        .cat-group .cat-header .chev { transition: .2s; font-size: 10px; display: inline-block; }
+        .cat-group.collapsed .cat-body { display: none; }
+        .cat-group.collapsed .chev { transform: rotate(-90deg); }
+        .cat-count { background: #1abc9c; color: #fff; border-radius: 10px; padding: 1px 8px; font-size: 11px; min-width: 14px; text-align: center; }
+        .cat-header.pinned .cat-count { background: #f1c40f; color: #2c3e50; }
+        .empty-hint { padding: 20px; color: #9fb3c8; font-size: 13px; line-height: 1.7; }
         /* 右侧展示区 */
         #main { flex: 1; padding: 30px 50px 50px; overflow-y: auto; }
         /* 云端搜寻栏 */
@@ -22,6 +36,14 @@
         #searchBar .lbl { font-size: 12px; color: #95a5a6; white-space: nowrap; }
         .card { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); }
         .btn { padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; color: white; font-size: 12px; }
+        /* 编辑器 */
+        .editor label { display: block; font-size: 13px; color: #7f8c8d; margin: 16px 0 6px; }
+        .editor input[type=text], .editor textarea { width: 100%; padding: 11px 13px; border: 1px solid #dfe4ea;
+            border-radius: 8px; font-family: inherit; font-size: 14px; box-sizing: border-box; color: #2c3e50; }
+        .editor input[type=text]:focus, .editor textarea:focus { outline: none; border-color: #1abc9c; }
+        .editor textarea { resize: vertical; line-height: 1.7; }
+        .editor .row-actions { margin-top: 22px; display: flex; gap: 10px; }
+        .cat-tag { display: inline-block; background: #eef6f4; color: #16a085; font-size: 12px; padding: 3px 12px; border-radius: 20px; }
         /* 搜寻结果 */
         .s-row { display: flex; align-items: center; gap: 14px; text-decoration: none; color: #2c3e50;
             padding: 13px 14px; border: 1px solid #eef1f4; border-radius: 10px; margin-bottom: 8px; transition: 0.15s; }
@@ -32,6 +54,9 @@
         .s-sub { font-size: 12px; color: #7f8c8d; margin-top: 3px; display: flex; gap: 10px; flex-wrap: wrap; }
         .s-sub .tag { color: #16a085; }
         .s-empty { color: #95a5a6; text-align: center; padding: 40px 0; }
+        .s-row .imp-btn { background: #1abc9c; flex: none; white-space: nowrap; }
+        .s-row .open-link { flex: none; text-decoration: none; color: #95a5a6; font-size: 18px; padding: 0 4px; }
+        .s-row .open-link:hover { color: #1abc9c; }
     </style>
 </head>
 <body>
@@ -52,16 +77,16 @@
         <input id="q" type="text" placeholder="输入关键字搜你 Google Drive 的档名与内容…　按 Enter" autocomplete="off">
         <button class="btn" style="background:#2c3e50;padding:9px 16px;font-size:13px" onclick="searchDrive()">搜寻</button>
     </div>
-    <div id="contentArea" class="card">
-        <h2>歡迎使用 UE 知識庫</h2>
-        <p>左側點選笔记即可讀取或編輯；上方搜尋欄可搜尋你 Google Drive 裡的檔案與內容。第一次使用會請你登入 Google。</p>
-    </div>
+    <div id="contentArea" class="card"></div>
 </div>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
     let notes = JSON.parse(localStorage.getItem('ueNotes')) || [];
     let currentId = null;
+
+    /* 折叠状态记忆 */
+    let collapsed = new Set(JSON.parse(localStorage.getItem('ueCollapsed') || '[]'));
 
     /* ===== Google 设定：只用可公开的 Client ID，没有任何密钥 ===== */
     const CLIENT_ID = "460796542989-k785gtt8fod50ivj808b7h3le7s4rvnd.apps.googleusercontent.com";
@@ -76,6 +101,7 @@
     let pendingQuery = "";
 
     function setStatus(t){ const s = document.getElementById('syncStatus'); if (s) s.textContent = t; }
+    function persist(){ localStorage.setItem('ueNotes', JSON.stringify(notes)); }
 
     window.addEventListener('load', () => {
         const timer = setInterval(() => {
@@ -149,9 +175,13 @@
             html += '<div class="s-empty">🗂️ 找不到符合的檔案</div>';
             area.innerHTML = html; return;
         }
-        html += '<p style="color:#7f8c8d;font-size:13px">共 ' + files.length + ' 筆（依修改時間排序）</p>';
-        html += files.map(f => `
-            <a class="s-row" href="${f.webViewLink || '#'}" target="_blank" rel="noopener">
+        html += '<p style="color:#7f8c8d;font-size:13px">共 ' + files.length + ' 筆（依修改時間排序）。可匯入的檔案按「📥 匯入成筆記」即可變成可編輯的網頁筆記。</p>';
+        window._results = {};
+        files.forEach(f => { window._results[f.id] = f; });
+        html += files.map(f => {
+            const can = canImport(f.mimeType);
+            return `
+            <div class="s-row">
                 <div class="s-ic">${icon(f.mimeType)}</div>
                 <div class="s-meta">
                     <div class="s-nm">${esc(f.name)}</div>
@@ -161,8 +191,44 @@
                         ${f.size ? '<span>' + fmtSize(f.size) + '</span>' : ''}
                     </div>
                 </div>
-            </a>`).join('');
+                ${can ? `<button class="btn imp-btn" onclick="importNote('${f.id}')">📥 匯入成筆記</button>` : ''}
+                <a class="open-link" href="${f.webViewLink || '#'}" target="_blank" rel="noopener" title="在 Drive 開啟原檔">↗</a>
+            </div>`;
+        }).join('');
         area.innerHTML = html;
+    }
+
+    /* 可匯入成文字筆記的格式：Google 文件、純文字、json/rtf */
+    function canImport(m) {
+        if (!m) return false;
+        if (m === 'application/vnd.google-apps.document') return true;
+        if (m.startsWith('text/')) return true;
+        if (m === 'application/json' || m === 'application/rtf') return true;
+        return false;
+    }
+
+    /* 把雲端檔案內容讀進來，建立一篇可編輯的網頁筆記 */
+    async function importNote(fileId) {
+        const f = (window._results || {})[fileId];
+        if (!f) { alert('找不到該檔案資料，請重新搜尋後再匯入。'); return; }
+        const area = document.getElementById('contentArea');
+        area.innerHTML = '<h2>匯入中…</h2>';
+        try {
+            const url = (f.mimeType === 'application/vnd.google-apps.document')
+                ? `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/plain`
+                : `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+            const r = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
+            if (r.status === 401) { accessToken = null; area.innerHTML = '<h2>登入已過期</h2><p>請再搜尋一次重新登入後，再按匯入。</p>'; return; }
+            if (!r.ok) { area.innerHTML = '<h2>匯入失敗（HTTP ' + r.status + '）</h2><p>此檔案可能不支援文字匯入。</p>'; return; }
+            const text = await r.text();
+            const id = Date.now();
+            const title = f.name.replace(/\.(txt|md|json|rtf)$/i, '');
+            notes.push({ id, title, content: text, img: '', isPinned: false, category: '匯入' });
+            persist(); render(); viewNote(id);
+            setStatus('已匯入「' + f.name + '」，記得按「云同步」存回 Drive');
+        } catch (e) {
+            area.innerHTML = '<h2>匯入發生錯誤</h2><p>' + esc(e.message) + '</p>';
+        }
     }
 
     function icon(m){ if(!m)return"📄"; if(m.includes("folder"))return"📁"; if(m.includes("document"))return"📝";
@@ -230,6 +296,8 @@
             if (r.status === 401) { accessToken = null; setStatus("登入過期"); alert("登入已過期，請再按一次「刷新」。"); return; }
             if (!r.ok) { setStatus("讀取失敗 HTTP " + r.status); alert("❌ 讀取失敗（HTTP " + r.status + "）"); return; }
             notes = await r.json();
+            // 旧资料相容：补上 category 栏位
+            notes = (notes || []).map(n => ({ category: '', ...n }));
             localStorage.setItem('ueNotes', JSON.stringify(notes));
             render();
             setStatus("已從 Google Drive 載入 ✓");
@@ -240,82 +308,183 @@
         }
     }
 
-    /* ============ 笔记核心功能（逻辑未更动）============ */
-    function render() {
-        notes.sort((a, b) => (b.isPinned - a.isPinned));
-        document.getElementById('noteList').innerHTML = notes.map(n => `
-            <div class="note-item" onclick="viewNote(${n.id})">
-                <span>${n.isPinned ? '📌 ' : ''}${n.title}</span>
-            </div>`).join('');
+    /* ============ 分类与侧栏渲染 ============ */
+    function uniqueCats() {
+        const set = new Set();
+        notes.forEach(n => { const c = (n.category || '').trim(); if (c) set.add(c); });
+        return [...set].sort((a, b) => a.localeCompare(b, 'zh-Hant'));
     }
+
+    function toggleCat(key) {
+        if (collapsed.has(key)) collapsed.delete(key); else collapsed.add(key);
+        localStorage.setItem('ueCollapsed', JSON.stringify([...collapsed]));
+        render();
+    }
+
+    function noteItemHTML(n) {
+        return `<div class="note-item" onclick="viewNote(${n.id})">
+            <span>${n.isPinned ? '<span class="pin">📌</span> ' : ''}${esc(n.title)}</span>
+        </div>`;
+    }
+
+    function groupHTML(key, name, items, pinned) {
+        const col = collapsed.has(key);
+        return `<div class="cat-group ${col ? 'collapsed' : ''}">
+            <div class="cat-header ${pinned ? 'pinned' : ''}" data-key="${esc(key)}">
+                <span class="left"><span class="chev">▾</span>${esc(name)}</span>
+                <span class="cat-count">${items.length}</span>
+            </div>
+            <div class="cat-body">${items.map(noteItemHTML).join('')}</div>
+        </div>`;
+    }
+
+    function render() {
+        const list = document.getElementById('noteList');
+        if (!notes.length) {
+            list.innerHTML = '<div class="empty-hint">還沒有筆記。<br>按上方「新建」開始建立，並可指定分類。</div>';
+            return;
+        }
+        let html = '';
+        const pinned = notes.filter(n => n.isPinned);
+        if (pinned.length) html += groupHTML('__pinned__', '📌 置頂', pinned, true);
+
+        const order = [...uniqueCats(), '']; // '' = 未分类，排最后
+        order.forEach(cat => {
+            const items = notes.filter(n => !n.isPinned && (n.category || '') === cat);
+            if (!items.length) return;
+            html += groupHTML(cat || '__uncat__', cat || '未分類', items, false);
+        });
+        list.innerHTML = html;
+    }
+
+    /* 折叠点击（事件委派，避免分类名含特殊字元出错）*/
+    document.getElementById('noteList').addEventListener('click', e => {
+        const h = e.target.closest('.cat-header');
+        if (h) toggleCat(h.dataset.key);
+    });
+
+    /* ============ 查看 / 编辑 / 新增 ============ */
+    function welcomeHTML() {
+        return `<h2>歡迎使用 UE 知識庫</h2>
+            <p style="line-height:1.8;color:#566573">左側依分類點選筆記即可讀取或編輯；按「新建」可建立筆記並指定分類。<br>
+            上方搜尋欄可搜尋你 Google Drive 裡的檔案與內容。第一次使用會請你登入 Google。</p>`;
+    }
+    function showWelcome(){ currentId = null; document.getElementById('contentArea').innerHTML = welcomeHTML(); }
 
     function viewNote(id) {
         currentId = id;
         const n = notes.find(n => n.id === id);
+        if (!n) { showWelcome(); return; }
+        const tag = n.category
+            ? `<span class="cat-tag">🗂️ ${esc(n.category)}</span>`
+            : `<span class="cat-tag" style="background:#f0f0f0;color:#999">未分類</span>`;
         document.getElementById('contentArea').innerHTML = `
-            <h2>${n.title}</h2>
-            <p style="line-height:1.8;">${n.content}</p>
-            ${n.img ? `<img src="${n.img}" style="max-width:100%; border-radius:8px;">` : ''}
-            <div style="margin-top:30px;">
-                <button class="btn" style="background:#f39c12" onclick="togglePin()">置顶</button>
-                <button class="btn" style="background:#3498db" onclick="editMode()">编辑</button>
-                <button class="btn" style="background:#e74c3c" onclick="deleteNote()">删除</button>
+            ${tag}
+            <h2 style="margin:10px 0 18px">${n.isPinned ? '📌 ' : ''}${esc(n.title)}</h2>
+            <div style="line-height:1.85;white-space:pre-wrap;color:#2c3e50">${esc(n.content)}</div>
+            ${n.img ? `<img src="${n.img}" style="max-width:100%; border-radius:8px; margin-top:18px;">` : ''}
+            <div style="margin-top:30px;display:flex;gap:10px;">
+                <button class="btn" style="background:#f39c12" onclick="togglePin()">${n.isPinned ? '取消置頂' : '置頂'}</button>
+                <button class="btn" style="background:#3498db" onclick="editMode()">編輯</button>
+                <button class="btn" style="background:#e74c3c" onclick="deleteNote()">刪除</button>
             </div>`;
+    }
+
+    function catDatalist() {
+        return `<datalist id="catList">${uniqueCats().map(c => `<option value="${esc(c)}">`).join('')}</datalist>`;
+    }
+
+    function newNote() {
+        currentId = null;
+        document.getElementById('contentArea').innerHTML = `
+            <div class="editor">
+                <h2 style="margin-top:0">新增筆記</h2>
+                <label>標題</label>
+                <input type="text" id="nTitle" placeholder="筆記標題">
+                <label>分類（可下拉選現有，或直接輸入新分類）</label>
+                <input type="text" id="nCat" list="catList" placeholder="例如：客服話術／排班／工作流程">
+                ${catDatalist()}
+                <label>內容</label>
+                <textarea id="nContent" rows="10" placeholder="輸入內容…"></textarea>
+                <label>圖片（可選）</label>
+                <input type="file" id="nImg" accept="image/*">
+                <div class="row-actions">
+                    <button class="btn" style="background:#27ae60" onclick="saveNew()">建立筆記</button>
+                    <button class="btn" style="background:#95a5a6" onclick="showWelcome()">取消</button>
+                </div>
+            </div>`;
+    }
+
+    function saveNew() {
+        const title = document.getElementById('nTitle').value.trim();
+        if (!title) { alert("請輸入標題"); return; }
+        const category = document.getElementById('nCat').value.trim();
+        const content = document.getElementById('nContent').value;
+        const file = document.getElementById('nImg').files[0];
+        const commit = (img) => {
+            const id = Date.now();
+            notes.push({ id, title, content: content || '', img: img || '', isPinned: false, category });
+            persist(); render(); viewNote(id);
+        };
+        if (file) { const r = new FileReader(); r.onload = e => commit(e.target.result); r.readAsDataURL(file); }
+        else commit('');
     }
 
     function editMode() {
         const n = notes.find(n => n.id === currentId);
+        if (!n) return;
         document.getElementById('contentArea').innerHTML = `
-            <input type="text" id="editTitle" value="${n.title}" style="width:100%; padding:10px; margin-bottom:10px;">
-            <textarea id="editContent" rows="10" style="width:100%; padding:10px;">${n.content}</textarea>
-            <input type="file" id="imgUpload" accept="image/*" style="margin:10px 0;">
-            <br><button class="btn" style="background:#27ae60" onclick="saveEdit()">保存内容</button>`;
+            <div class="editor">
+                <label>標題</label>
+                <input type="text" id="editTitle" value="${esc(n.title)}">
+                <label>分類</label>
+                <input type="text" id="editCat" list="catList" value="${esc(n.category || '')}" placeholder="留空＝未分類">
+                ${catDatalist()}
+                <label>內容</label>
+                <textarea id="editContent" rows="10">${esc(n.content)}</textarea>
+                <label>更換圖片（可選）</label>
+                <input type="file" id="imgUpload" accept="image/*">
+                <div class="row-actions">
+                    <button class="btn" style="background:#27ae60" onclick="saveEdit()">保存內容</button>
+                    <button class="btn" style="background:#95a5a6" onclick="viewNote(${n.id})">取消</button>
+                </div>
+            </div>`;
     }
 
     function saveEdit() {
-        const title = document.getElementById('editTitle').value;
+        const title = document.getElementById('editTitle').value.trim() || '(無標題)';
+        const category = document.getElementById('editCat').value.trim();
         const content = document.getElementById('editContent').value;
         const file = document.getElementById('imgUpload').files[0];
+        const cur = notes.find(n => n.id === currentId);
         if (file) {
             const reader = new FileReader();
-            reader.onload = e => updateData(title, content, e.target.result);
+            reader.onload = e => updateData(title, content, e.target.result, category);
             reader.readAsDataURL(file);
-        } else updateData(title, content, notes.find(n => n.id === currentId).img);
+        } else updateData(title, content, cur ? cur.img : '', category);
     }
 
-    function updateData(title, content, img) {
-        notes = notes.map(n => n.id === currentId ? {...n, title, content, img} : n);
-        localStorage.setItem('ueNotes', JSON.stringify(notes));
-        render(); viewNote(currentId);
-    }
-
-    function newNote() {
-        const title = prompt("标题:");
-        if (title) {
-            notes.push({ id: Date.now(), title, content: "...", img: "", isPinned: false });
-            localStorage.setItem('ueNotes', JSON.stringify(notes));
-            render();
-        }
+    function updateData(title, content, img, category) {
+        notes = notes.map(n => n.id === currentId ? { ...n, title, content, img, category } : n);
+        persist(); render(); viewNote(currentId);
     }
 
     function togglePin() {
-        notes = notes.map(n => n.id === currentId ? {...n, isPinned: !n.isPinned} : n);
-        localStorage.setItem('ueNotes', JSON.stringify(notes));
-        render(); viewNote(currentId);
+        notes = notes.map(n => n.id === currentId ? { ...n, isPinned: !n.isPinned } : n);
+        persist(); render(); viewNote(currentId);
     }
 
     function deleteNote() {
-        if(confirm("确定删除？")) {
+        if (confirm("確定刪除？")) {
             notes = notes.filter(n => n.id !== currentId);
-            localStorage.setItem('ueNotes', JSON.stringify(notes));
-            render();
-            document.getElementById('contentArea').innerHTML = "<h2>已删除</h2>";
+            persist(); render(); showWelcome();
         }
     }
 
     // Enter 键搜寻
     document.getElementById('q').addEventListener('keydown', e => { if (e.key === 'Enter') searchDrive(); });
 
+    showWelcome();
     render();
 </script>
 </body>
