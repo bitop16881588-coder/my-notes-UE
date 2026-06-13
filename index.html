@@ -99,6 +99,7 @@
         <button onclick="newNote()" class="btn" style="background:#1abc9c">新建</button>
         <button onclick="syncToCloud()" class="btn" style="background:#f39c12">云同步</button>
         <button onclick="pullFromCloud()" class="btn" style="background:#3498db">刷新</button>
+        <button onclick="clearAllNotes()" class="btn" style="background:#e74c3c" title="清空全部筆記">清空</button>
         <button onclick="lockApp()" class="btn" style="background:#7f8c8d" title="鎖定">🔒</button>
     </div>
     <div id="syncStatus">尚未登入 Google</div>
@@ -665,6 +666,15 @@
         persist(); render();
         if (currentId !== null && ids.has(currentId)) showWelcome();
         setStatus('已刪除「' + name + '」分類（' + targets.length + ' 篇），記得按云同步更新雲端');
+    }
+
+    function clearAllNotes() {
+        if (!notes.length) { alert('目前沒有筆記。'); return; }
+        if (!confirm('確定刪除全部 ' + notes.length + ' 篇筆記？此動作無法復原。\n（雲端要等你按「云同步」才會跟著清空）')) return;
+        if (!confirm('再次確認：真的要清空「全部」筆記嗎？')) return;
+        notes = [];
+        persist(); render(); showWelcome();
+        setStatus('已清空全部筆記，按「云同步」會同步清空雲端');
     }
 
     function render() {
