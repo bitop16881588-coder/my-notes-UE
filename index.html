@@ -25,6 +25,9 @@
         .cat-group.collapsed .cat-body { display: none; }
         .cat-group.collapsed .chev { transform: rotate(-90deg); }
         .cat-count { background: #1abc9c; color: #fff; border-radius: 10px; padding: 1px 8px; font-size: 11px; min-width: 14px; text-align: center; }
+        .cat-group .cat-header .right { display: flex; align-items: center; gap: 8px; }
+        .cat-del { background: transparent; border: none; color: #7f8c8d; cursor: pointer; font-size: 13px; padding: 0 2px; opacity: .5; }
+        .cat-del:hover { color: #e74c3c; opacity: 1; }
         .cat-header.pinned .cat-count { background: #f1c40f; color: #2c3e50; }
         .empty-hint { padding: 20px; color: #9fb3c8; font-size: 13px; line-height: 1.7; }
         /* 右侧展示区 */
@@ -57,6 +60,15 @@
         .s-row .imp-btn { background: #1abc9c; flex: none; white-space: nowrap; }
         .s-row .open-link { flex: none; text-decoration: none; color: #95a5a6; font-size: 18px; padding: 0 4px; }
         .s-row .open-link:hover { color: #1abc9c; }
+        /* 多圖編輯器 */
+        .img-drop { border: 2px dashed #cdd6df; border-radius: 10px; padding: 18px; text-align: center; color: #7f8c8d; font-size: 13px; background: #fafbfc; }
+        .img-drop.drag { border-color: #1abc9c; background: #f1faf8; color: #16a085; }
+        .img-pick { color: #1abc9c; cursor: pointer; text-decoration: underline; }
+        .img-thumbs { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+        .img-thumb { position: relative; width: 96px; height: 96px; border-radius: 8px; overflow: hidden; border: 1px solid #e1e5ea; }
+        .img-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .img-thumb .img-x { position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; border: none; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; cursor: pointer; font-size: 12px; line-height: 1; }
+        .img-thumb .img-x:hover { background: #e74c3c; }
     </style>
 </head>
 <body>
@@ -84,6 +96,8 @@
 <script>
     let notes = JSON.parse(localStorage.getItem('ueNotes')) || [];
     let currentId = null;
+    let editImgs = [];          // 編輯中暫存的圖片（dataURL 陣列）
+    let imgEditActive = false;  // 是否正在編輯（決定 Ctrl+V 貼圖是否生效）
 
     /* 折叠状态记忆 */
     let collapsed = new Set(JSON.parse(localStorage.getItem('ueCollapsed') || '[]'));
@@ -282,18 +296,28 @@
         document.getElementById('contentArea').innerHTML = `
             <div class="editor">
                 <h2 style="margin-top:0">匯入試算表：${esc(name)}</h2>
-                <p style="color:#7f8c8d;font-size:13px">共 ${rows.length} 列、${cols} 欄。指定下面三項後，每一列會變成一篇筆記。</p>
+                <p style="color:#7f8c8d;font-size:13px">共 ${rows.length} 列、${cols} 欄。</p>
                 <div style="overflow-x:auto;margin:8px 0 2px"><table style="border-collapse:collapse">${prev}</table></div>
                 <p style="color:#95a5a6;font-size:12px;margin:0 0 4px">↑ 預覽前幾列</p>
-                <label>標題欄</label>
-                <select id="mapTitle" style="${selStyle}">${opt(0)}</select>
-                <label>內容欄</label>
-                <select id="mapContent" style="${selStyle}">${opt(cols > 1 ? 1 : 0)}</select>
-                <label>分類欄（可不選）</label>
-                <select id="mapCat" style="${selStyle}">${catOpt()}</select>
-                <label style="display:flex;align-items:center;gap:8px;margin-top:16px;cursor:pointer;color:#566573">
-                    <input type="checkbox" id="mapHeader" checked> 第一列是標題列（略過不匯入）
-                </label>
+                <label>匯入方式</label>
+                <select id="importMode" style="${selStyle}" onchange="toggleImportMode()">
+                    <option value="cell" selected>每格＝一則（最上面那列當分類名稱）｜適合罐頭語</option>
+                    <option value="row">每一列＝一則（自己對應標題／內容／分類欄）</option>
+                </select>
+                <div id="cellModeHint" style="color:#7f8c8d;font-size:13px;margin-top:10px;line-height:1.6">
+                    會把<b>每一欄最上面那格</b>當「分類」，下面每個非空白儲存格<b>各自變成一則筆記</b>（標題自動取開頭幾個字，內容是整格文字）。
+                </div>
+                <div id="rowMapBlock" style="display:none">
+                    <label>標題欄</label>
+                    <select id="mapTitle" style="${selStyle}">${opt(0)}</select>
+                    <label>內容欄</label>
+                    <select id="mapContent" style="${selStyle}">${opt(cols > 1 ? 1 : 0)}</select>
+                    <label>分類欄（可不選）</label>
+                    <select id="mapCat" style="${selStyle}">${catOpt()}</select>
+                    <label style="display:flex;align-items:center;gap:8px;margin-top:16px;cursor:pointer;color:#566573">
+                        <input type="checkbox" id="mapHeader" checked> 第一列是標題列（略過不匯入）
+                    </label>
+                </div>
                 <div class="row-actions">
                     <button class="btn" style="background:#27ae60" onclick="doImportSheet()">開始匯入</button>
                     <button class="btn" style="background:#95a5a6" onclick="showWelcome()">取消</button>
@@ -301,27 +325,52 @@
             </div>`;
     }
 
+    function toggleImportMode() {
+        const mode = document.getElementById('importMode').value;
+        document.getElementById('rowMapBlock').style.display = mode === 'row' ? 'block' : 'none';
+        document.getElementById('cellModeHint').style.display = mode === 'cell' ? 'block' : 'none';
+    }
+
     function doImportSheet() {
         const rows = window._sheetRows || [];
-        const tI = +document.getElementById('mapTitle').value;
-        const cI = +document.getElementById('mapContent').value;
-        const catI = +document.getElementById('mapCat').value;
-        const skip = document.getElementById('mapHeader').checked;
-        const data = skip ? rows.slice(1) : rows;
+        const mode = (document.getElementById('importMode') || {}).value || 'cell';
         let added = 0, firstId = null;
-        data.forEach(r => {
-            const title = (r[tI] || '').trim();
-            const content = (r[cI] || '').trim();
-            if (!title && !content) return;
-            const category = catI >= 0 ? (r[catI] || '').trim() : '匯入';
+        const pushNote = (title, content, category) => {
             const id = Date.now() + added;
             if (firstId === null) firstId = id;
-            notes.push({ id, title: title || '(無標題)', content, img: '', isPinned: false, category });
+            notes.push({ id, title: title || '(無標題)', content: content || '', imgs: [], img: '', isPinned: false, category });
             added++;
-        });
+        };
+        if (mode === 'cell') {
+            const headers = rows[0] || [];
+            const cols = Math.max(...rows.map(r => r.length));
+            for (let c = 0; c < cols; c++) {
+                const cat = (headers[c] || '').trim() || ('第' + (c + 1) + '欄');
+                for (let r = 1; r < rows.length; r++) {
+                    const cell = ((rows[r] || [])[c] || '').trim();
+                    if (!cell) continue;
+                    const firstLine = cell.split('\n')[0];
+                    const title = firstLine.length > 30 ? firstLine.slice(0, 30) + '…' : firstLine;
+                    pushNote(title, cell, cat);
+                }
+            }
+        } else {
+            const tI = +document.getElementById('mapTitle').value;
+            const cI = +document.getElementById('mapContent').value;
+            const catI = +document.getElementById('mapCat').value;
+            const skip = document.getElementById('mapHeader').checked;
+            const data = skip ? rows.slice(1) : rows;
+            data.forEach(r => {
+                const title = (r[tI] || '').trim();
+                const content = (r[cI] || '').trim();
+                if (!title && !content) return;
+                const category = catI >= 0 ? (r[catI] || '').trim() : '匯入';
+                pushNote(title, content, category);
+            });
+        }
         persist(); render();
         if (added) { viewNote(firstId); setStatus('已從試算表匯入 ' + added + ' 篇，記得按「云同步」存回 Drive'); }
-        else { showWelcome(); alert('沒有可匯入的資料列。'); }
+        else { showWelcome(); alert('沒有可匯入的資料。'); }
     }
 
     function icon(m){ if(!m)return"📄"; if(m.includes("folder"))return"📁"; if(m.includes("document"))return"📝";
@@ -422,13 +471,27 @@
 
     function groupHTML(key, name, items, pinned) {
         const col = collapsed.has(key);
+        const del = pinned ? '' : `<button class="cat-del" data-key="${esc(key)}" title="刪除此分類所有筆記">🗑</button>`;
         return `<div class="cat-group ${col ? 'collapsed' : ''}">
             <div class="cat-header ${pinned ? 'pinned' : ''}" data-key="${esc(key)}">
                 <span class="left"><span class="chev">▾</span>${esc(name)}</span>
-                <span class="cat-count">${items.length}</span>
+                <span class="right">${del}<span class="cat-count">${items.length}</span></span>
             </div>
             <div class="cat-body">${items.map(noteItemHTML).join('')}</div>
         </div>`;
+    }
+
+    function deleteCategory(key) {
+        const cat = key === '__uncat__' ? '' : key;
+        const targets = notes.filter(n => !n.isPinned && (n.category || '') === cat);
+        if (!targets.length) return;
+        const name = cat || '未分類';
+        if (!confirm('確定刪除「' + name + '」分類底下的 ' + targets.length + ' 篇筆記？此動作無法復原。')) return;
+        const ids = new Set(targets.map(n => n.id));
+        notes = notes.filter(n => !ids.has(n.id));
+        persist(); render();
+        if (currentId !== null && ids.has(currentId)) showWelcome();
+        setStatus('已刪除「' + name + '」分類（' + targets.length + ' 篇），記得按云同步更新雲端');
     }
 
     function render() {
@@ -452,6 +515,8 @@
 
     /* 折叠点击（事件委派，避免分类名含特殊字元出错）*/
     document.getElementById('noteList').addEventListener('click', e => {
+        const del = e.target.closest('.cat-del');
+        if (del) { e.stopPropagation(); deleteCategory(del.dataset.key); return; }
         const h = e.target.closest('.cat-header');
         if (h) toggleCat(h.dataset.key);
     });
@@ -462,20 +527,69 @@
             <p style="line-height:1.8;color:#566573">左側依分類點選筆記即可讀取或編輯；按「新建」可建立筆記並指定分類。<br>
             上方搜尋欄可搜尋你 Google Drive 裡的檔案與內容。第一次使用會請你登入 Google。</p>`;
     }
-    function showWelcome(){ currentId = null; document.getElementById('contentArea').innerHTML = welcomeHTML(); }
+    function showWelcome(){ currentId = null; imgEditActive = false; document.getElementById('contentArea').innerHTML = welcomeHTML(); }
+
+    /* 取得一篇筆記的圖片陣列（相容舊的單張 img 欄位）*/
+    function imgsOf(n) {
+        if (Array.isArray(n.imgs)) return n.imgs;
+        return n.img ? [n.img] : [];
+    }
+
+    /* 圖片編輯器 UI（拖曳 / Ctrl+V / 選檔，多張）*/
+    function imgEditorHTML() {
+        return `
+            <label>圖片（可多張：直接拖曳、Ctrl+V 貼上，或選檔）</label>
+            <div id="imgDrop" class="img-drop" tabindex="0">拖曳圖片到這裡、或按 Ctrl+V 貼上、或
+                <label class="img-pick">選擇檔案<input type="file" accept="image/*" multiple style="display:none" onchange="addImgFiles(this.files); this.value='';"></label>
+            </div>
+            <div id="imgThumbs" class="img-thumbs"></div>`;
+    }
+    function renderImgThumbs() {
+        const box = document.getElementById('imgThumbs');
+        if (!box) return;
+        box.innerHTML = editImgs.map((src, i) =>
+            `<div class="img-thumb"><img src="${src}"><button type="button" class="img-x" onclick="removeImg(${i})">✕</button></div>`).join('');
+    }
+    function addImgFiles(files) {
+        [...files].forEach(f => {
+            if (!f.type || !f.type.startsWith('image/')) return;
+            const r = new FileReader();
+            r.onload = e => { editImgs.push(e.target.result); renderImgThumbs(); };
+            r.readAsDataURL(f);
+        });
+    }
+    function removeImg(i) { editImgs.splice(i, 1); renderImgThumbs(); }
+    function bindImgDrop() {
+        const dz = document.getElementById('imgDrop');
+        if (!dz) return;
+        dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
+        dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+        dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('drag'); addImgFiles(e.dataTransfer.files); });
+    }
+    function onPasteImage(e) {
+        if (!imgEditActive) return;
+        const items = (e.clipboardData || {}).items || [];
+        let used = false;
+        for (const it of items) {
+            if (it.type && it.type.startsWith('image/')) { const f = it.getAsFile(); if (f) { addImgFiles([f]); used = true; } }
+        }
+        if (used) e.preventDefault();
+    }
 
     function viewNote(id) {
-        currentId = id;
+        currentId = id; imgEditActive = false;
         const n = notes.find(n => n.id === id);
         if (!n) { showWelcome(); return; }
         const tag = n.category
             ? `<span class="cat-tag">🗂️ ${esc(n.category)}</span>`
             : `<span class="cat-tag" style="background:#f0f0f0;color:#999">未分類</span>`;
+        const imgHTML = imgsOf(n).map(src =>
+            `<img src="${src}" style="max-width:100%; border-radius:8px; margin-top:18px; display:block;">`).join('');
         document.getElementById('contentArea').innerHTML = `
             ${tag}
             <h2 style="margin:10px 0 18px">${n.isPinned ? '📌 ' : ''}${esc(n.title)}</h2>
             <div style="line-height:1.85;white-space:pre-wrap;color:#2c3e50">${esc(n.content)}</div>
-            ${n.img ? `<img src="${n.img}" style="max-width:100%; border-radius:8px; margin-top:18px;">` : ''}
+            ${imgHTML}
             <div style="margin-top:30px;display:flex;gap:10px;">
                 <button class="btn" style="background:#f39c12" onclick="togglePin()">${n.isPinned ? '取消置頂' : '置頂'}</button>
                 <button class="btn" style="background:#3498db" onclick="editMode()">編輯</button>
@@ -488,7 +602,7 @@
     }
 
     function newNote() {
-        currentId = null;
+        currentId = null; editImgs = []; imgEditActive = true;
         document.getElementById('contentArea').innerHTML = `
             <div class="editor">
                 <h2 style="margin-top:0">新增筆記</h2>
@@ -499,13 +613,13 @@
                 ${catDatalist()}
                 <label>內容</label>
                 <textarea id="nContent" rows="10" placeholder="輸入內容…"></textarea>
-                <label>圖片（可選）</label>
-                <input type="file" id="nImg" accept="image/*">
+                ${imgEditorHTML()}
                 <div class="row-actions">
                     <button class="btn" style="background:#27ae60" onclick="saveNew()">建立筆記</button>
                     <button class="btn" style="background:#95a5a6" onclick="showWelcome()">取消</button>
                 </div>
             </div>`;
+        renderImgThumbs(); bindImgDrop();
     }
 
     function saveNew() {
@@ -513,19 +627,16 @@
         if (!title) { alert("請輸入標題"); return; }
         const category = document.getElementById('nCat').value.trim();
         const content = document.getElementById('nContent').value;
-        const file = document.getElementById('nImg').files[0];
-        const commit = (img) => {
-            const id = Date.now();
-            notes.push({ id, title, content: content || '', img: img || '', isPinned: false, category });
-            persist(); render(); viewNote(id);
-        };
-        if (file) { const r = new FileReader(); r.onload = e => commit(e.target.result); r.readAsDataURL(file); }
-        else commit('');
+        const id = Date.now();
+        notes.push({ id, title, content: content || '', imgs: editImgs.slice(), img: '', isPinned: false, category });
+        imgEditActive = false;
+        persist(); render(); viewNote(id);
     }
 
     function editMode() {
         const n = notes.find(n => n.id === currentId);
         if (!n) return;
+        editImgs = imgsOf(n).slice(); imgEditActive = true;
         document.getElementById('contentArea').innerHTML = `
             <div class="editor">
                 <label>標題</label>
@@ -535,30 +646,25 @@
                 ${catDatalist()}
                 <label>內容</label>
                 <textarea id="editContent" rows="10">${esc(n.content)}</textarea>
-                <label>更換圖片（可選）</label>
-                <input type="file" id="imgUpload" accept="image/*">
+                ${imgEditorHTML()}
                 <div class="row-actions">
                     <button class="btn" style="background:#27ae60" onclick="saveEdit()">保存內容</button>
                     <button class="btn" style="background:#95a5a6" onclick="viewNote(${n.id})">取消</button>
                 </div>
             </div>`;
+        renderImgThumbs(); bindImgDrop();
     }
 
     function saveEdit() {
         const title = document.getElementById('editTitle').value.trim() || '(無標題)';
         const category = document.getElementById('editCat').value.trim();
         const content = document.getElementById('editContent').value;
-        const file = document.getElementById('imgUpload').files[0];
-        const cur = notes.find(n => n.id === currentId);
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = e => updateData(title, content, e.target.result, category);
-            reader.readAsDataURL(file);
-        } else updateData(title, content, cur ? cur.img : '', category);
+        updateData(title, content, editImgs.slice(), category);
     }
 
-    function updateData(title, content, img, category) {
-        notes = notes.map(n => n.id === currentId ? { ...n, title, content, img, category } : n);
+    function updateData(title, content, imgs, category) {
+        notes = notes.map(n => n.id === currentId ? { ...n, title, content, imgs, img: '', category } : n);
+        imgEditActive = false;
         persist(); render(); viewNote(currentId);
     }
 
@@ -576,6 +682,8 @@
 
     // Enter 键搜寻
     document.getElementById('q').addEventListener('keydown', e => { if (e.key === 'Enter') searchDrive(); });
+    // 編輯時 Ctrl+V 貼上圖片
+    document.addEventListener('paste', onPasteImage);
 
     showWelcome();
     render();
