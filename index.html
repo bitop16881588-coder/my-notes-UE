@@ -202,6 +202,7 @@
     function canImport(m) {
         if (!m) return false;
         if (m === 'application/vnd.google-apps.document') return true;
+        if (m === 'application/vnd.google-apps.spreadsheet') return true;
         if (m.startsWith('text/')) return true;
         if (m === 'application/json' || m === 'application/rtf') return true;
         return false;
@@ -213,6 +214,7 @@
         if (!f) { alert('找不到該檔案資料，請重新搜尋後再匯入。'); return; }
         const area = document.getElementById('contentArea');
         area.innerHTML = '<h2>匯入中…</h2>';
+        if (f.mimeType === 'application/vnd.google-apps.spreadsheet') { importSheet(fileId, f); return; }
         try {
             const url = (f.mimeType === 'application/vnd.google-apps.document')
                 ? `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/plain`
@@ -229,6 +231,97 @@
         } catch (e) {
             area.innerHTML = '<h2>匯入發生錯誤</h2><p>' + esc(e.message) + '</p>';
         }
+    }
+
+    /* ===== 從 Google 試算表匯入：每一列變一篇筆記 ===== */
+    function parseCSV(text) {
+        const rows = []; let row = []; let field = ''; let i = 0; let inQ = false;
+        while (i < text.length) {
+            const c = text[i];
+            if (inQ) {
+                if (c === '"') { if (text[i + 1] === '"') { field += '"'; i += 2; continue; } inQ = false; i++; continue; }
+                field += c; i++; continue;
+            } else {
+                if (c === '"') { inQ = true; i++; continue; }
+                if (c === ',') { row.push(field); field = ''; i++; continue; }
+                if (c === '\r') { i++; continue; }
+                if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; i++; continue; }
+                field += c; i++; continue;
+            }
+        }
+        if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+        return rows;
+    }
+
+    async function importSheet(fileId, f) {
+        const area = document.getElementById('contentArea');
+        try {
+            const url = `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/csv`;
+            const r = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
+            if (r.status === 401) { accessToken = null; area.innerHTML = '<h2>登入已過期</h2><p>請再搜尋一次重新登入後，再按匯入。</p>'; return; }
+            if (!r.ok) { area.innerHTML = '<h2>讀取試算表失敗（HTTP ' + r.status + '）</h2>'; return; }
+            const text = await r.text();
+            const rows = parseCSV(text).filter(row => row.some(c => (c || '').trim() !== ''));
+            if (!rows.length) { area.innerHTML = '<h2>這份試算表是空的</h2>'; return; }
+            window._sheetRows = rows;
+            renderSheetMapping(rows, f.name);
+        } catch (e) {
+            area.innerHTML = '<h2>讀取試算表發生錯誤</h2><p>' + esc(e.message) + '</p>';
+        }
+    }
+
+    function renderSheetMapping(rows, name) {
+        const cols = Math.max(...rows.map(r => r.length));
+        const head = rows[0] || [];
+        const colLabel = k => '第' + (k + 1) + '欄' + (head[k] ? '（' + esc(String(head[k]).slice(0, 12)) + '）' : '');
+        const opt = (sel) => { let s = ''; for (let k = 0; k < cols; k++) s += `<option value="${k}" ${k === sel ? 'selected' : ''}>${colLabel(k)}</option>`; return s; };
+        const catOpt = () => { let s = '<option value="-1" selected>（不指定，全部歸到「匯入」）</option>'; for (let k = 0; k < cols; k++) s += `<option value="${k}">${colLabel(k)}</option>`; return s; };
+        const prev = rows.slice(0, 4).map(r => '<tr>' + Array.from({ length: cols }, (_, k) =>
+            '<td style="border:1px solid #e1e5ea;padding:5px 8px;font-size:12px;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(String(r[k] ?? '')) + '</td>').join('') + '</tr>').join('');
+        const selStyle = 'width:100%;padding:10px;border:1px solid #dfe4ea;border-radius:8px;font-family:inherit;font-size:14px;color:#2c3e50';
+        document.getElementById('contentArea').innerHTML = `
+            <div class="editor">
+                <h2 style="margin-top:0">匯入試算表：${esc(name)}</h2>
+                <p style="color:#7f8c8d;font-size:13px">共 ${rows.length} 列、${cols} 欄。指定下面三項後，每一列會變成一篇筆記。</p>
+                <div style="overflow-x:auto;margin:8px 0 2px"><table style="border-collapse:collapse">${prev}</table></div>
+                <p style="color:#95a5a6;font-size:12px;margin:0 0 4px">↑ 預覽前幾列</p>
+                <label>標題欄</label>
+                <select id="mapTitle" style="${selStyle}">${opt(0)}</select>
+                <label>內容欄</label>
+                <select id="mapContent" style="${selStyle}">${opt(cols > 1 ? 1 : 0)}</select>
+                <label>分類欄（可不選）</label>
+                <select id="mapCat" style="${selStyle}">${catOpt()}</select>
+                <label style="display:flex;align-items:center;gap:8px;margin-top:16px;cursor:pointer;color:#566573">
+                    <input type="checkbox" id="mapHeader" checked> 第一列是標題列（略過不匯入）
+                </label>
+                <div class="row-actions">
+                    <button class="btn" style="background:#27ae60" onclick="doImportSheet()">開始匯入</button>
+                    <button class="btn" style="background:#95a5a6" onclick="showWelcome()">取消</button>
+                </div>
+            </div>`;
+    }
+
+    function doImportSheet() {
+        const rows = window._sheetRows || [];
+        const tI = +document.getElementById('mapTitle').value;
+        const cI = +document.getElementById('mapContent').value;
+        const catI = +document.getElementById('mapCat').value;
+        const skip = document.getElementById('mapHeader').checked;
+        const data = skip ? rows.slice(1) : rows;
+        let added = 0, firstId = null;
+        data.forEach(r => {
+            const title = (r[tI] || '').trim();
+            const content = (r[cI] || '').trim();
+            if (!title && !content) return;
+            const category = catI >= 0 ? (r[catI] || '').trim() : '匯入';
+            const id = Date.now() + added;
+            if (firstId === null) firstId = id;
+            notes.push({ id, title: title || '(無標題)', content, img: '', isPinned: false, category });
+            added++;
+        });
+        persist(); render();
+        if (added) { viewNote(firstId); setStatus('已從試算表匯入 ' + added + ' 篇，記得按「云同步」存回 Drive'); }
+        else { showWelcome(); alert('沒有可匯入的資料列。'); }
     }
 
     function icon(m){ if(!m)return"📄"; if(m.includes("folder"))return"📁"; if(m.includes("document"))return"📝";
