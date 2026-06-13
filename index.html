@@ -10,6 +10,9 @@
         #sidebar { width: 350px; background: #2c3e50; color: white; display: flex; flex-direction: column; }
         .toolbar { padding: 15px; background: #1a252f; border-bottom: 2px solid #1abc9c; display: flex; gap: 5px; flex-wrap: wrap; }
         #syncStatus { font-size: 11px; color: #9fb3c8; padding: 8px 15px; border-bottom: 1px solid #3e4f5f; }
+        #listCtrl { padding: 8px 12px; border-bottom: 1px solid #3e4f5f; display: flex; justify-content: flex-end; }
+        #collapseToggle { background: transparent; border: 1px solid #3e4f5f; color: #9fb3c8; font-size: 12px; padding: 4px 12px; border-radius: 6px; cursor: pointer; }
+        #collapseToggle:hover { border-color: #1abc9c; color: #cfe0ee; }
         #noteList { flex: 1; overflow-y: auto; }
         .note-item { padding: 13px 15px 13px 26px; border-bottom: 1px solid #34404d; cursor: pointer; transition: 0.2s; display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
         .note-item:hover { background: #34495e; }
@@ -80,6 +83,7 @@
         <button onclick="pullFromCloud()" class="btn" style="background:#3498db">刷新</button>
     </div>
     <div id="syncStatus">尚未登入 Google</div>
+    <div id="listCtrl"><button id="collapseToggle" onclick="toggleAllCats()">收合全部</button></div>
     <div id="noteList"></div>
 </div>
 
@@ -463,6 +467,34 @@
         render();
     }
 
+    /* 目前畫面上所有分組的 key（含置頂、未分類）*/
+    function allCatKeys() {
+        const keys = [];
+        if (notes.some(n => n.isPinned)) keys.push('__pinned__');
+        uniqueCats().forEach(c => keys.push(c));
+        if (notes.some(n => !n.isPinned && !(n.category || '').trim())) keys.push('__uncat__');
+        return keys;
+    }
+
+    /* 一鍵收合 / 展開全部 */
+    function toggleAllCats() {
+        const keys = allCatKeys();
+        const allCol = keys.length > 0 && keys.every(k => collapsed.has(k));
+        if (allCol) keys.forEach(k => collapsed.delete(k));
+        else keys.forEach(k => collapsed.add(k));
+        localStorage.setItem('ueCollapsed', JSON.stringify([...collapsed]));
+        render();
+    }
+
+    function updateCollapseToggle() {
+        const btn = document.getElementById('collapseToggle');
+        if (!btn) return;
+        const keys = allCatKeys();
+        btn.style.visibility = keys.length ? 'visible' : 'hidden';
+        const allCol = keys.length > 0 && keys.every(k => collapsed.has(k));
+        btn.textContent = allCol ? '展開全部' : '收合全部';
+    }
+
     function noteItemHTML(n) {
         return `<div class="note-item" onclick="viewNote(${n.id})">
             <span>${n.isPinned ? '<span class="pin">📌</span> ' : ''}${esc(n.title)}</span>
@@ -498,6 +530,7 @@
         const list = document.getElementById('noteList');
         if (!notes.length) {
             list.innerHTML = '<div class="empty-hint">還沒有筆記。<br>按上方「新建」開始建立，並可指定分類。</div>';
+            updateCollapseToggle();
             return;
         }
         let html = '';
@@ -511,6 +544,7 @@
             html += groupHTML(cat || '__uncat__', cat || '未分類', items, false);
         });
         list.innerHTML = html;
+        updateCollapseToggle();
     }
 
     /* 折叠点击（事件委派，避免分类名含特殊字元出错）*/
