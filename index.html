@@ -131,6 +131,7 @@
             sessionStorage.setItem('ueUnlocked', '1');
             document.getElementById('lockScreen').style.display = 'none';
             document.getElementById('lockMsg').textContent = '';
+            autoLogin();
         } else {
             document.getElementById('lockMsg').textContent = '密碼錯誤';
             const i = document.getElementById('lockInput'); i.value = ''; i.focus();
@@ -182,6 +183,7 @@
                         const act = pendingAction; pendingAction = null;
                         if (act === 'sync') doSync();
                         else if (act === 'pull') doPull();
+                        else if (act === 'autopull') doPull(true);
                         else if (act === 'search') doSearch(pendingQuery);
                     },
                 });
@@ -321,18 +323,99 @@
     async function importSheet(fileId, f) {
         const area = document.getElementById('contentArea');
         try {
-            const url = `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/csv`;
-            const r = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
-            if (r.status === 401) { accessToken = null; area.innerHTML = '<h2>登入已過期</h2><p>請再搜尋一次重新登入後，再按匯入。</p>'; return; }
-            if (!r.ok) { area.innerHTML = '<h2>讀取試算表失敗（HTTP ' + r.status + '）</h2>'; return; }
-            const text = await r.text();
-            const rows = parseCSV(text).filter(row => row.some(c => (c || '').trim() !== ''));
-            if (!rows.length) { area.innerHTML = '<h2>這份試算表是空的</h2>'; return; }
-            window._sheetRows = rows;
-            renderSheetMapping(rows, f.name);
+            // 1) 取得所有分頁（工作表）的名稱
+            const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${fileId}?fields=sheets.properties(title)`;
+            const mr = await fetch(metaUrl, { headers: { Authorization: 'Bearer ' + accessToken } });
+            if (mr.status === 401) { accessToken = null; area.innerHTML = '<h2>登入已過期</h2><p>請再搜尋一次重新登入後，再按匯入。</p>'; return; }
+            if (mr.status === 403) { area.innerHTML = sheetsApiHelp(); return; }
+            if (!mr.ok) { area.innerHTML = '<h2>讀取試算表失敗（HTTP ' + mr.status + '）</h2>'; return; }
+            const meta = await mr.json();
+            const titles = (meta.sheets || []).map(s => s.properties.title);
+            if (!titles.length) { area.innerHTML = '<h2>這份試算表沒有分頁</h2>'; return; }
+            // 2) 一次抓所有分頁的內容
+            const params = new URLSearchParams();
+            titles.forEach(t => params.append('ranges', "'" + String(t).replace(/'/g, "''") + "'"));
+            params.append('majorDimension', 'ROWS');
+            const vr = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${fileId}/values:batchGet?` + params.toString(),
+                { headers: { Authorization: 'Bearer ' + accessToken } });
+            if (vr.status === 403) { area.innerHTML = sheetsApiHelp(); return; }
+            if (!vr.ok) { area.innerHTML = '<h2>讀取分頁內容失敗（HTTP ' + vr.status + '）</h2>'; return; }
+            const data = await vr.json();
+            const ranges = data.valueRanges || [];
+            const sheets = titles.map((t, i) => ({ title: t, rows: (ranges[i] && ranges[i].values) || [] }));
+            window._sheets = sheets;
+            renderSheetMapping2(sheets, f.name);
         } catch (e) {
             area.innerHTML = '<h2>讀取試算表發生錯誤</h2><p>' + esc(e.message) + '</p>';
         }
+    }
+
+    function sheetsApiHelp() {
+        return `<h2>需要先開啟「Google Sheets API」</h2>
+            <p style="line-height:1.8;color:#566573">要照「分頁」分類，程式必須讀取試算表的<b>每一個分頁</b>，這需要在你的 Google Cloud 專案開啟一次 <b>Google Sheets API</b>（免費，只做一次）。步驟：</p>
+            <ol style="line-height:2;color:#2c3e50">
+                <li>開啟 <a href="https://console.cloud.google.com/apis/library/sheets.googleapis.com" target="_blank" rel="noopener">Google Sheets API 啟用頁</a></li>
+                <li>確認左上角的「專案」是這個 App 在用的同一個專案</li>
+                <li>按藍色的「啟用 / Enable」</li>
+                <li>等 1～2 分鐘，回來重新搜尋、再按一次「📥 匯入成筆記」</li>
+            </ol>`;
+    }
+
+    function renderSheetMapping2(sheets, name) {
+        const selStyle = 'width:100%;padding:10px;border:1px solid #dfe4ea;border-radius:8px;font-family:inherit;font-size:14px;color:#2c3e50';
+        const list = sheets.map(s => `<li>${esc(s.title)}　<span style="color:#95a5a6">（${s.rows.length} 列）</span></li>`).join('');
+        document.getElementById('contentArea').innerHTML = `
+            <div class="editor">
+                <h2 style="margin-top:0">匯入試算表：${esc(name)}</h2>
+                <p style="color:#7f8c8d;font-size:13px">找到 <b>${sheets.length}</b> 個分頁，會把<b>每個分頁的名稱當作分類</b>：</p>
+                <ul style="line-height:1.9;color:#2c3e50;margin:6px 0 14px;padding-left:22px">${list}</ul>
+                <label>每個分頁內，怎麼變成筆記</label>
+                <select id="sheetCellMode" style="${selStyle}">
+                    <option value="cell" selected>每個儲存格＝一則（適合罐頭語）</option>
+                    <option value="row">每一列＝一則（整列合併成一則）</option>
+                </select>
+                <label style="display:flex;align-items:center;gap:8px;margin-top:16px;cursor:pointer;color:#566573">
+                    <input type="checkbox" id="sheetSkipHeader"> 略過每個分頁的第一列（如果第一列是欄位標題）
+                </label>
+                <div class="row-actions">
+                    <button class="btn" style="background:#27ae60" onclick="doImportSheets2()">開始匯入</button>
+                    <button class="btn" style="background:#95a5a6" onclick="showWelcome()">取消</button>
+                </div>
+            </div>`;
+    }
+
+    function doImportSheets2() {
+        const sheets = window._sheets || [];
+        const mode = document.getElementById('sheetCellMode').value;
+        const skip = document.getElementById('sheetSkipHeader').checked;
+        let added = 0, firstId = null;
+        const mkTitle = (txt) => { const fl = (txt || '').split('\n')[0]; return fl.length > 30 ? fl.slice(0, 30) + '…' : fl; };
+        const push = (content, category) => {
+            const id = Date.now() + added;
+            if (firstId === null) firstId = id;
+            notes.push({ id, title: mkTitle(content) || '(無標題)', content: content || '', imgs: [], img: '', isPinned: false, category });
+            added++;
+        };
+        sheets.forEach(s => {
+            const cat = (s.title || '').trim() || '未命名分頁';
+            let rows = s.rows || [];
+            if (skip) rows = rows.slice(1);
+            if (mode === 'row') {
+                rows.forEach(r => {
+                    const cells = (r || []).map(c => (c == null ? '' : String(c)).trim()).filter(x => x);
+                    if (!cells.length) return;
+                    push(cells.join('\n'), cat);
+                });
+            } else {
+                rows.forEach(r => (r || []).forEach(c => {
+                    const cell = (c == null ? '' : String(c)).trim();
+                    if (cell) push(cell, cat);
+                }));
+            }
+        });
+        persist(); render();
+        if (added) { viewNote(firstId); setStatus('已依分頁匯入 ' + added + ' 篇，記得按「云同步」存回 Drive'); }
+        else { showWelcome(); alert('沒有可匯入的資料。'); }
     }
 
     function renderSheetMapping(rows, name) {
@@ -479,26 +562,37 @@
     }
 
     function pullFromCloud(){ if (ensureToken('pull')) doPull(); }
-    async function doPull() {
+    async function doPull(quiet) {
         try {
             setStatus("讀取中…");
             const id = await findDataFile();
-            if (!id) { setStatus("雲端尚無資料"); alert("雲端還沒有資料（你還沒同步過）。"); return; }
+            if (!id) { setStatus("雲端尚無資料"); if (!quiet) alert("雲端還沒有資料（你還沒同步過）。"); return; }
             const r = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`,
                 { headers: { Authorization: 'Bearer ' + accessToken } });
-            if (r.status === 401) { accessToken = null; setStatus("登入過期"); alert("登入已過期，請再按一次「刷新」。"); return; }
-            if (!r.ok) { setStatus("讀取失敗 HTTP " + r.status); alert("❌ 讀取失敗（HTTP " + r.status + "）"); return; }
+            if (r.status === 401) { accessToken = null; setStatus("登入過期"); if (!quiet) alert("登入已過期，請再按一次「刷新」。"); return; }
+            if (!r.ok) { setStatus("讀取失敗 HTTP " + r.status); if (!quiet) alert("❌ 讀取失敗（HTTP " + r.status + "）"); return; }
             notes = await r.json();
             // 旧资料相容：补上 category 栏位
             notes = (notes || []).map(n => ({ category: '', ...n }));
             localStorage.setItem('ueNotes', JSON.stringify(notes));
             render();
             setStatus("已從 Google Drive 載入 ✓");
-            alert("✅ 数据已同步！");
+            if (!quiet) alert("✅ 数据已同步！");
         } catch (e) {
-            if (e && e.code === 401) { setStatus("登入過期"); alert("登入已過期，請再按一次「刷新」。"); return; }
-            setStatus("讀取錯誤"); alert("讀取發生錯誤：" + (e.message || e));
+            if (e && e.code === 401) { setStatus("登入過期"); if (!quiet) alert("登入已過期，請再按一次「刷新」。"); return; }
+            setStatus("讀取錯誤"); if (!quiet) alert("讀取發生錯誤：" + (e.message || e));
         }
+    }
+
+    /* 進入後自動登入 Google 並抓雲端資料（在「進入」按鈕的點擊事件中呼叫，避免被擋彈窗）*/
+    function autoLogin() {
+        if (accessToken) { doPull(true); return; }
+        if (tokenClient) { pendingAction = 'autopull'; tokenClient.requestAccessToken({ prompt: '' }); return; }
+        let tries = 0;
+        const t = setInterval(() => {
+            if (tokenClient) { clearInterval(t); pendingAction = 'autopull'; tokenClient.requestAccessToken({ prompt: '' }); }
+            else if (++tries > 25) { clearInterval(t); setStatus('Google 元件載入中，請按「刷新」登入'); }
+        }, 200);
     }
 
     /* ============ 分类与侧栏渲染 ============ */
