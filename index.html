@@ -5,82 +5,111 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>UE 高效知识库</title>
     <style>
-        body { font-family: 'Microsoft JhengHei', sans-serif; display: flex; height: 100vh; margin: 0; background: #f8f9fa; }
-        /* 左侧管理区 */
-        #sidebar { width: 350px; background: #2c3e50; color: white; display: flex; flex-direction: column; }
-        .toolbar { padding: 15px; background: #1a252f; border-bottom: 2px solid #1abc9c; display: flex; gap: 5px; flex-wrap: wrap; }
-        #syncStatus { font-size: 11px; color: #9fb3c8; padding: 8px 15px; border-bottom: 1px solid #3e4f5f; }
-        #listCtrl { padding: 8px 12px; border-bottom: 1px solid #3e4f5f; display: flex; justify-content: flex-end; }
-        #collapseToggle { background: transparent; border: 1px solid #3e4f5f; color: #9fb3c8; font-size: 12px; padding: 4px 12px; border-radius: 6px; cursor: pointer; }
-        #collapseToggle:hover { border-color: #1abc9c; color: #cfe0ee; }
+        :root {
+            --bg:#F4EEE4; --surface:#FFFFFF; --border:#ECE3D4; --border-strong:#E0D4C0;
+            --ink:#3B2F27; --muted:#9C8C7B; --faint:#B8A998;
+            --accent:#B0876A; --accent-d:#956C4E; --accent-soft:#EFE5D7;
+            --side:#43342B; --side-2:#392B23; --side-line:#564539; --side-ink:#F0E8DD; --side-muted:#B6A593;
+            --danger:#C0573F;
+        }
+        * { box-sizing: border-box; }
+        body { font-family: 'Microsoft JhengHei', 'Noto Sans TC', sans-serif; display: flex; height: 100vh; margin: 0; background: var(--bg); color: var(--ink); }
+        /* 側欄 */
+        #sidebar { width: 320px; background: var(--side); color: var(--side-ink); display: flex; flex-direction: column; }
+        .side-head { padding: 18px 16px 14px; background: var(--side-2); border-bottom: 1px solid var(--side-line); }
+        .brand { font-size: 15px; font-weight: 700; letter-spacing: 1px; margin-bottom: 14px; }
+        .side-actions { display: flex; gap: 6px; margin-top: 8px; }
+        .s-btn { flex: 1; padding: 8px 6px; border: 1px solid var(--side-line); background: transparent; color: var(--side-muted);
+            border-radius: 8px; font-size: 13px; font-family: inherit; cursor: pointer; transition: .15s; white-space: nowrap; }
+        .s-btn:hover { border-color: var(--accent); color: var(--side-ink); }
+        .s-btn.primary { flex: none; width: 100%; border: none; background: var(--accent); color: #fff; font-weight: 600; padding: 11px; font-size: 14px; }
+        .s-btn.primary:hover { background: var(--accent-d); }
+        .s-btn.danger:hover { border-color: var(--danger); color: #F2C4B8; }
+        #syncStatus { font-size: 11px; color: var(--side-muted); padding: 9px 16px; border-bottom: 1px solid var(--side-line); }
+        #listCtrl { padding: 8px 14px; border-bottom: 1px solid var(--side-line); display: flex; justify-content: flex-end; }
+        #collapseToggle { background: transparent; border: 1px solid var(--side-line); color: var(--side-muted); font-size: 12px; padding: 4px 12px; border-radius: 6px; cursor: pointer; transition: .15s; }
+        #collapseToggle:hover { border-color: var(--accent); color: var(--side-ink); }
         #noteList { flex: 1; overflow-y: auto; }
-        .note-item { padding: 13px 15px 13px 26px; border-bottom: 1px solid #34404d; cursor: pointer; transition: 0.2s; display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
-        .note-item:hover { background: #34495e; }
-        .note-item .pin { color: #f1c40f; }
+        .note-item { padding: 12px 16px 12px 28px; border-bottom: 1px solid var(--side-line); cursor: pointer; transition: .15s; display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
+        .note-item:hover { background: rgba(255,255,255,.06); }
+        .note-item .pin { color: #E3B341; }
         /* 分类分组 */
-        .cat-group .cat-header { padding: 11px 15px; background: #23303d; color: #9fb3c8; font-size: 12px; font-weight: bold;
+        .cat-group .cat-header { padding: 11px 14px; background: rgba(0,0,0,.14); color: var(--side-muted); font-size: 12px; font-weight: 700;
             cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;
-            border-bottom: 1px solid #3e4f5f; letter-spacing: .5px; }
-        .cat-group .cat-header:hover { background: #2a3a49; color: #cfe0ee; }
-        .cat-group .cat-header.pinned { color: #f1c40f; }
+            border-bottom: 1px solid var(--side-line); letter-spacing: .5px; }
+        .cat-group .cat-header:hover { color: var(--side-ink); }
+        .cat-group .cat-header.pinned { color: #E3B341; }
         .cat-group .cat-header .left { display: flex; align-items: center; gap: 8px; }
         .cat-group .cat-header .chev { transition: .2s; font-size: 10px; display: inline-block; }
         .cat-group.collapsed .cat-body { display: none; }
         .cat-group.collapsed .chev { transform: rotate(-90deg); }
-        .cat-count { background: #1abc9c; color: #fff; border-radius: 10px; padding: 1px 8px; font-size: 11px; min-width: 14px; text-align: center; }
+        .cat-count { background: var(--accent); color: #fff; border-radius: 10px; padding: 1px 8px; font-size: 11px; min-width: 14px; text-align: center; }
         .cat-group .cat-header .right { display: flex; align-items: center; gap: 8px; }
-        .cat-del { background: transparent; border: none; color: #7f8c8d; cursor: pointer; font-size: 13px; padding: 0 2px; opacity: .5; }
-        .cat-del:hover { color: #e74c3c; opacity: 1; }
-        .cat-header.pinned .cat-count { background: #f1c40f; color: #2c3e50; }
-        .empty-hint { padding: 20px; color: #9fb3c8; font-size: 13px; line-height: 1.7; }
+        .cat-del { background: transparent; border: none; color: var(--side-muted); cursor: pointer; font-size: 13px; padding: 0 2px; opacity: .5; }
+        .cat-del:hover { color: var(--danger); opacity: 1; }
+        .cat-header.pinned .cat-count { background: #E3B341; color: var(--side-2); }
+        .empty-hint { padding: 22px 18px; color: var(--side-muted); font-size: 13px; line-height: 1.8; }
         /* 右侧展示区 */
-        #main { flex: 1; padding: 30px 50px 50px; overflow-y: auto; }
+        #main { flex: 1; padding: 28px 44px 48px; overflow-y: auto; }
         /* 云端搜寻栏 */
-        #searchBar { display: flex; gap: 8px; align-items: center; background: white; border: 1px solid #e1e5ea;
-            border-radius: 10px; padding: 8px 8px 8px 16px; box-shadow: 0 4px 14px rgba(0,0,0,0.05); margin-bottom: 24px; }
-        #searchBar input { flex: 1; border: 0; outline: none; font-size: 15px; font-family: inherit; color: #2c3e50; padding: 8px 0; }
-        #searchBar .lbl { font-size: 12px; color: #95a5a6; white-space: nowrap; }
-        .card { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); }
-        .btn { padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; color: white; font-size: 12px; }
+        #searchBar { display: flex; gap: 10px; align-items: center; background: var(--surface); border: 1px solid var(--border);
+            border-radius: 12px; padding: 7px 7px 7px 16px; box-shadow: 0 2px 10px rgba(67,52,43,.05); margin-bottom: 24px; }
+        #searchBar .lbl { font-size: 15px; color: var(--faint); }
+        #searchBar input { flex: 1; border: 0; outline: none; font-size: 15px; font-family: inherit; color: var(--ink); padding: 9px 0; background: transparent; }
+        #searchBar input::placeholder { color: var(--faint); }
+        .card { background: var(--surface); padding: 38px 40px; border-radius: 14px; border: 1px solid var(--border); box-shadow: 0 6px 24px rgba(67,52,43,.06); }
+        .card h2 { color: var(--ink); }
+        /* 按鈕系統 */
+        .btn { padding: 9px 16px; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-family: inherit; transition: .15s; background: var(--accent-soft); color: var(--ink); }
+        .btn:hover { filter: brightness(.97); }
+        .btn.primary { background: var(--accent); color: #fff; }
+        .btn.primary:hover { background: var(--accent-d); filter: none; }
+        .btn.secondary { background: var(--accent-soft); color: var(--accent-d); }
+        .btn.ghost { background: transparent; border: 1px solid var(--border-strong); color: var(--muted); }
+        .btn.ghost:hover { border-color: var(--accent); color: var(--accent-d); filter: none; }
+        .btn.warn { background: #F1E3CF; color: #9A6B2E; }
+        .btn.danger { background: #F3DAD2; color: #A8412B; }
+        .btn.danger:hover { background: #EBCABF; filter: none; }
         /* 编辑器 */
-        .editor label { display: block; font-size: 13px; color: #7f8c8d; margin: 16px 0 6px; }
-        .editor input[type=text], .editor textarea { width: 100%; padding: 11px 13px; border: 1px solid #dfe4ea;
-            border-radius: 8px; font-family: inherit; font-size: 14px; box-sizing: border-box; color: #2c3e50; }
-        .editor input[type=text]:focus, .editor textarea:focus { outline: none; border-color: #1abc9c; }
+        .editor label { display: block; font-size: 13px; color: var(--muted); margin: 16px 0 6px; }
+        .editor input[type=text], .editor textarea, .editor select { width: 100%; padding: 11px 13px; border: 1px solid var(--border-strong);
+            border-radius: 8px; font-family: inherit; font-size: 14px; box-sizing: border-box; color: var(--ink); background: var(--surface); }
+        .editor input[type=text]:focus, .editor textarea:focus, .editor select:focus { outline: none; border-color: var(--accent); }
         .editor textarea { resize: vertical; line-height: 1.7; }
         .editor .row-actions { margin-top: 22px; display: flex; gap: 10px; }
-        .cat-tag { display: inline-block; background: #eef6f4; color: #16a085; font-size: 12px; padding: 3px 12px; border-radius: 20px; }
+        .cat-tag { display: inline-block; background: var(--accent-soft); color: var(--accent-d); font-size: 12px; padding: 3px 12px; border-radius: 20px; }
         /* 搜寻结果 */
-        .s-row { display: flex; align-items: center; gap: 14px; text-decoration: none; color: #2c3e50;
-            padding: 13px 14px; border: 1px solid #eef1f4; border-radius: 10px; margin-bottom: 8px; transition: 0.15s; }
-        .s-row:hover { border-color: #1abc9c; background: #f7fbfa; }
-        .s-ic { flex: none; width: 38px; height: 38px; border-radius: 9px; display: grid; place-items: center; font-size: 19px; background: #eef6f4; }
+        .s-row { display: flex; align-items: center; gap: 14px; text-decoration: none; color: var(--ink);
+            padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; transition: .15s; }
+        .s-row:hover { border-color: var(--accent); background: var(--accent-soft); }
+        .s-ic { flex: none; width: 38px; height: 38px; border-radius: 9px; display: grid; place-items: center; font-size: 19px; background: var(--accent-soft); }
         .s-meta { flex: 1; min-width: 0; }
         .s-nm { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .s-sub { font-size: 12px; color: #7f8c8d; margin-top: 3px; display: flex; gap: 10px; flex-wrap: wrap; }
-        .s-sub .tag { color: #16a085; }
-        .s-empty { color: #95a5a6; text-align: center; padding: 40px 0; }
-        .s-row .imp-btn { background: #1abc9c; flex: none; white-space: nowrap; }
-        .s-row .open-link { flex: none; text-decoration: none; color: #95a5a6; font-size: 18px; padding: 0 4px; }
-        .s-row .open-link:hover { color: #1abc9c; }
+        .s-sub { font-size: 12px; color: var(--muted); margin-top: 3px; display: flex; gap: 10px; flex-wrap: wrap; }
+        .s-sub .tag { color: var(--accent-d); }
+        .s-empty { color: var(--muted); text-align: center; padding: 40px 0; }
+        .s-row .imp-btn { background: var(--accent); color: #fff; flex: none; white-space: nowrap; }
+        .s-row .imp-btn:hover { background: var(--accent-d); filter: none; }
+        .s-row .open-link { flex: none; text-decoration: none; color: var(--faint); font-size: 18px; padding: 0 4px; }
+        .s-row .open-link:hover { color: var(--accent); }
         /* 多圖編輯器 */
-        .img-drop { border: 2px dashed #cdd6df; border-radius: 10px; padding: 18px; text-align: center; color: #7f8c8d; font-size: 13px; background: #fafbfc; }
-        .img-drop.drag { border-color: #1abc9c; background: #f1faf8; color: #16a085; }
-        .img-pick { color: #1abc9c; cursor: pointer; text-decoration: underline; }
+        .img-drop { border: 2px dashed var(--border-strong); border-radius: 10px; padding: 18px; text-align: center; color: var(--muted); font-size: 13px; background: #FBF7F0; }
+        .img-drop.drag { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-d); }
+        .img-pick { color: var(--accent-d); cursor: pointer; text-decoration: underline; }
         .img-thumbs { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
-        .img-thumb { position: relative; width: 96px; height: 96px; border-radius: 8px; overflow: hidden; border: 1px solid #e1e5ea; }
+        .img-thumb { position: relative; width: 96px; height: 96px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-strong); }
         .img-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-        .img-thumb .img-x { position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; border: none; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; cursor: pointer; font-size: 12px; line-height: 1; }
-        .img-thumb .img-x:hover { background: #e74c3c; }
+        .img-thumb .img-x { position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; border: none; border-radius: 50%; background: rgba(0,0,0,.55); color: #fff; cursor: pointer; font-size: 12px; line-height: 1; }
+        .img-thumb .img-x:hover { background: var(--danger); }
         /* 密碼鎖 */
-        #lockScreen { position: fixed; inset: 0; z-index: 9999; background: #2c3e50; display: flex; align-items: center; justify-content: center; }
-        .lock-box { background: #1a252f; padding: 36px 32px; border-radius: 14px; width: 280px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,.4); }
-        .lock-title { color: #fff; font-size: 18px; font-weight: bold; margin-bottom: 22px; }
-        .lock-box input { width: 100%; box-sizing: border-box; padding: 12px 14px; border: 1px solid #3e4f5f; border-radius: 8px; background: #2c3e50; color: #fff; font-size: 15px; font-family: inherit; outline: none; }
-        .lock-box input:focus { border-color: #1abc9c; }
-        .lock-box button { width: 100%; margin-top: 14px; padding: 12px; border: none; border-radius: 8px; background: #1abc9c; color: #fff; font-size: 15px; cursor: pointer; }
-        .lock-box button:hover { background: #16a085; }
-        #lockMsg { color: #e74c3c; font-size: 13px; min-height: 18px; margin-top: 12px; }
+        #lockScreen { position: fixed; inset: 0; z-index: 9999; background: var(--side); display: flex; align-items: center; justify-content: center; }
+        .lock-box { background: var(--side-2); padding: 38px 34px; border-radius: 16px; width: 280px; text-align: center; box-shadow: 0 24px 60px rgba(0,0,0,.4); }
+        .lock-title { color: var(--side-ink); font-size: 18px; font-weight: 700; margin-bottom: 22px; letter-spacing: 1px; }
+        .lock-box input { width: 100%; box-sizing: border-box; padding: 12px 14px; border: 1px solid var(--side-line); border-radius: 8px; background: var(--side); color: var(--side-ink); font-size: 15px; font-family: inherit; outline: none; }
+        .lock-box input:focus { border-color: var(--accent); }
+        .lock-box button { width: 100%; margin-top: 14px; padding: 12px; border: none; border-radius: 8px; background: var(--accent); color: #fff; font-size: 15px; cursor: pointer; }
+        .lock-box button:hover { background: var(--accent-d); }
+        #lockMsg { color: #E9A18E; font-size: 13px; min-height: 18px; margin-top: 12px; }
     </style>
 </head>
 <body>
@@ -95,12 +124,15 @@
 </div>
 
 <div id="sidebar">
-    <div class="toolbar">
-        <button onclick="newNote()" class="btn" style="background:#1abc9c">新建</button>
-        <button onclick="syncToCloud()" class="btn" style="background:#f39c12">云同步</button>
-        <button onclick="pullFromCloud()" class="btn" style="background:#3498db">刷新</button>
-        <button onclick="clearAllNotes()" class="btn" style="background:#e74c3c" title="清空全部筆記">清空</button>
-        <button onclick="lockApp()" class="btn" style="background:#7f8c8d" title="鎖定">🔒</button>
+    <div class="side-head">
+        <div class="brand">UE 知識庫</div>
+        <button class="s-btn primary" onclick="newNote()">＋ 新增筆記</button>
+        <div class="side-actions">
+            <button class="s-btn" onclick="syncToCloud()">同步</button>
+            <button class="s-btn" onclick="pullFromCloud()">刷新</button>
+            <button class="s-btn danger" onclick="clearAllNotes()">清空</button>
+            <button class="s-btn" onclick="lockApp()" title="鎖定">🔒</button>
+        </div>
     </div>
     <div id="syncStatus">尚未登入 Google</div>
     <div id="listCtrl"><button id="collapseToggle" onclick="toggleAllCats()">收合全部</button></div>
@@ -109,9 +141,9 @@
 
 <div id="main">
     <div id="searchBar">
-        <span class="lbl">🔍 搜云端</span>
-        <input id="q" type="text" placeholder="输入关键字搜你 Google Drive 的档名与内容…　按 Enter" autocomplete="off">
-        <button class="btn" style="background:#2c3e50;padding:9px 16px;font-size:13px" onclick="searchDrive()">搜寻</button>
+        <span class="lbl">🔍</span>
+        <input id="q" type="text" placeholder="搜尋你 Google Drive 的檔名或內容，按 Enter" autocomplete="off">
+        <button class="btn primary" onclick="searchDrive()">搜尋</button>
     </div>
     <div id="contentArea" class="card"></div>
 </div>
@@ -354,7 +386,7 @@
     function sheetsApiHelp() {
         return `<h2>需要先開啟「Google Sheets API」</h2>
             <p style="line-height:1.8;color:#566573">要照「分頁」分類，程式必須讀取試算表的<b>每一個分頁</b>，這需要在你的 Google Cloud 專案開啟一次 <b>Google Sheets API</b>（免費，只做一次）。步驟：</p>
-            <ol style="line-height:2;color:#2c3e50">
+            <ol style="line-height:2;color:#3B2F27">
                 <li>開啟 <a href="https://console.cloud.google.com/apis/library/sheets.googleapis.com" target="_blank" rel="noopener">Google Sheets API 啟用頁</a></li>
                 <li>確認左上角的「專案」是這個 App 在用的同一個專案</li>
                 <li>按藍色的「啟用 / Enable」</li>
@@ -363,13 +395,13 @@
     }
 
     function renderSheetMapping2(sheets, name) {
-        const selStyle = 'width:100%;padding:10px;border:1px solid #dfe4ea;border-radius:8px;font-family:inherit;font-size:14px;color:#2c3e50';
-        const list = sheets.map(s => `<li>${esc(s.title)}　<span style="color:#95a5a6">（${s.rows.length} 列）</span></li>`).join('');
+        const selStyle = 'width:100%;padding:10px;border:1px solid #E0D4C0;border-radius:8px;font-family:inherit;font-size:14px;color:#3B2F27';
+        const list = sheets.map(s => `<li>${esc(s.title)}　<span style="color:#9C8C7B">（${s.rows.length} 列）</span></li>`).join('');
         document.getElementById('contentArea').innerHTML = `
             <div class="editor">
                 <h2 style="margin-top:0">匯入試算表：${esc(name)}</h2>
                 <p style="color:#7f8c8d;font-size:13px">找到 <b>${sheets.length}</b> 個分頁，會把<b>每個分頁的名稱當作分類</b>：</p>
-                <ul style="line-height:1.9;color:#2c3e50;margin:6px 0 14px;padding-left:22px">${list}</ul>
+                <ul style="line-height:1.9;color:#3B2F27;margin:6px 0 14px;padding-left:22px">${list}</ul>
                 <label>每個分頁內，怎麼變成筆記</label>
                 <select id="sheetCellMode" style="${selStyle}">
                     <option value="cell" selected>每個儲存格＝一則（適合罐頭語）</option>
@@ -379,8 +411,8 @@
                     <input type="checkbox" id="sheetSkipHeader"> 略過每個分頁的第一列（如果第一列是欄位標題）
                 </label>
                 <div class="row-actions">
-                    <button class="btn" style="background:#27ae60" onclick="doImportSheets2()">開始匯入</button>
-                    <button class="btn" style="background:#95a5a6" onclick="showWelcome()">取消</button>
+                    <button class="btn primary" onclick="doImportSheets2()">開始匯入</button>
+                    <button class="btn ghost" onclick="showWelcome()">取消</button>
                 </div>
             </div>`;
     }
@@ -426,14 +458,14 @@
         const opt = (sel) => { let s = ''; for (let k = 0; k < cols; k++) s += `<option value="${k}" ${k === sel ? 'selected' : ''}>${colLabel(k)}</option>`; return s; };
         const catOpt = () => { let s = '<option value="-1" selected>（不指定，全部歸到「匯入」）</option>'; for (let k = 0; k < cols; k++) s += `<option value="${k}">${colLabel(k)}</option>`; return s; };
         const prev = rows.slice(0, 4).map(r => '<tr>' + Array.from({ length: cols }, (_, k) =>
-            '<td style="border:1px solid #e1e5ea;padding:5px 8px;font-size:12px;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(String(r[k] ?? '')) + '</td>').join('') + '</tr>').join('');
-        const selStyle = 'width:100%;padding:10px;border:1px solid #dfe4ea;border-radius:8px;font-family:inherit;font-size:14px;color:#2c3e50';
+            '<td style="border:1px solid #E0D4C0;padding:5px 8px;font-size:12px;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(String(r[k] ?? '')) + '</td>').join('') + '</tr>').join('');
+        const selStyle = 'width:100%;padding:10px;border:1px solid #E0D4C0;border-radius:8px;font-family:inherit;font-size:14px;color:#3B2F27';
         document.getElementById('contentArea').innerHTML = `
             <div class="editor">
                 <h2 style="margin-top:0">匯入試算表：${esc(name)}</h2>
                 <p style="color:#7f8c8d;font-size:13px">共 ${rows.length} 列、${cols} 欄。</p>
                 <div style="overflow-x:auto;margin:8px 0 2px"><table style="border-collapse:collapse">${prev}</table></div>
-                <p style="color:#95a5a6;font-size:12px;margin:0 0 4px">↑ 預覽前幾列</p>
+                <p style="color:#9C8C7B;font-size:12px;margin:0 0 4px">↑ 預覽前幾列</p>
                 <label>匯入方式</label>
                 <select id="importMode" style="${selStyle}" onchange="toggleImportMode()">
                     <option value="cell" selected>每格＝一則（最上面那列當分類名稱）｜適合罐頭語</option>
@@ -454,8 +486,8 @@
                     </label>
                 </div>
                 <div class="row-actions">
-                    <button class="btn" style="background:#27ae60" onclick="doImportSheet()">開始匯入</button>
-                    <button class="btn" style="background:#95a5a6" onclick="showWelcome()">取消</button>
+                    <button class="btn primary" onclick="doImportSheet()">開始匯入</button>
+                    <button class="btn ghost" onclick="showWelcome()">取消</button>
                 </div>
             </div>`;
     }
@@ -767,18 +799,18 @@
         if (!n) { showWelcome(); return; }
         const tag = n.category
             ? `<span class="cat-tag">🗂️ ${esc(n.category)}</span>`
-            : `<span class="cat-tag" style="background:#f0f0f0;color:#999">未分類</span>`;
+            : `<span class="cat-tag" style="background:#EEE7DB;color:#9C8C7B">未分類</span>`;
         const imgHTML = imgsOf(n).map(src =>
             `<img src="${src}" style="max-width:100%; border-radius:8px; margin-top:18px; display:block;">`).join('');
         document.getElementById('contentArea').innerHTML = `
             ${tag}
             <h2 style="margin:10px 0 18px">${n.isPinned ? '📌 ' : ''}${esc(n.title)}</h2>
-            <div style="line-height:1.85;white-space:pre-wrap;color:#2c3e50">${esc(n.content)}</div>
+            <div style="line-height:1.85;white-space:pre-wrap;color:#3B2F27">${esc(n.content)}</div>
             ${imgHTML}
             <div style="margin-top:30px;display:flex;gap:10px;">
-                <button class="btn" style="background:#f39c12" onclick="togglePin()">${n.isPinned ? '取消置頂' : '置頂'}</button>
-                <button class="btn" style="background:#3498db" onclick="editMode()">編輯</button>
-                <button class="btn" style="background:#e74c3c" onclick="deleteNote()">刪除</button>
+                <button class="btn warn" onclick="togglePin()">${n.isPinned ? '取消置頂' : '置頂'}</button>
+                <button class="btn secondary" onclick="editMode()">編輯</button>
+                <button class="btn danger" onclick="deleteNote()">刪除</button>
             </div>`;
     }
 
@@ -800,8 +832,8 @@
                 <textarea id="nContent" rows="10" placeholder="輸入內容…"></textarea>
                 ${imgEditorHTML()}
                 <div class="row-actions">
-                    <button class="btn" style="background:#27ae60" onclick="saveNew()">建立筆記</button>
-                    <button class="btn" style="background:#95a5a6" onclick="showWelcome()">取消</button>
+                    <button class="btn primary" onclick="saveNew()">建立筆記</button>
+                    <button class="btn ghost" onclick="showWelcome()">取消</button>
                 </div>
             </div>`;
         renderImgThumbs(); bindImgDrop();
@@ -833,8 +865,8 @@
                 <textarea id="editContent" rows="10">${esc(n.content)}</textarea>
                 ${imgEditorHTML()}
                 <div class="row-actions">
-                    <button class="btn" style="background:#27ae60" onclick="saveEdit()">保存內容</button>
-                    <button class="btn" style="background:#95a5a6" onclick="viewNote(${n.id})">取消</button>
+                    <button class="btn primary" onclick="saveEdit()">保存內容</button>
+                    <button class="btn ghost" onclick="viewNote(${n.id})">取消</button>
                 </div>
             </div>`;
         renderImgThumbs(); bindImgDrop();
