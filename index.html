@@ -400,14 +400,15 @@
         document.getElementById('contentArea').innerHTML = `
             <div class="editor">
                 <h2 style="margin-top:0">匯入試算表：${esc(name)}</h2>
-                <p style="color:#7f8c8d;font-size:13px">找到 <b>${sheets.length}</b> 個分頁，會把<b>每個分頁的名稱當作分類</b>：</p>
+                <p style="color:#9C8C7B;font-size:13px">找到 <b>${sheets.length}</b> 個分頁：</p>
                 <ul style="line-height:1.9;color:#3B2F27;margin:6px 0 14px;padding-left:22px">${list}</ul>
-                <label>每個分頁內，怎麼變成筆記</label>
+                <label>匯入方式</label>
                 <select id="sheetCellMode" style="${selStyle}">
-                    <option value="cell" selected>每個儲存格＝一則（適合罐頭語）</option>
-                    <option value="row">每一列＝一則（整列合併成一則）</option>
+                    <option value="merge" selected>整個分頁＝一頁筆記（分頁名稱當標題，內容全放同一頁）</option>
+                    <option value="row">每一列＝一則（分頁名稱當分類）</option>
+                    <option value="cell">每個儲存格＝一則（分頁名稱當分類）</option>
                 </select>
-                <label style="display:flex;align-items:center;gap:8px;margin-top:16px;cursor:pointer;color:#566573">
+                <label style="display:flex;align-items:center;gap:8px;margin-top:16px;cursor:pointer;color:#9C8C7B">
                     <input type="checkbox" id="sheetSkipHeader"> 略過每個分頁的第一列（如果第一列是欄位標題）
                 </label>
                 <div class="row-actions">
@@ -423,26 +424,33 @@
         const skip = document.getElementById('sheetSkipHeader').checked;
         let added = 0, firstId = null;
         const mkTitle = (txt) => { const fl = (txt || '').split('\n')[0]; return fl.length > 30 ? fl.slice(0, 30) + '…' : fl; };
-        const push = (content, category) => {
+        const add1 = (title, content, category) => {
             const id = Date.now() + added;
             if (firstId === null) firstId = id;
-            notes.push({ id, title: mkTitle(content) || '(無標題)', content: content || '', imgs: [], img: '', isPinned: false, category });
+            notes.push({ id, title: title || '(無標題)', content: content || '', imgs: [], img: '', isPinned: false, category });
             added++;
         };
         sheets.forEach(s => {
             const cat = (s.title || '').trim() || '未命名分頁';
             let rows = s.rows || [];
             if (skip) rows = rows.slice(1);
-            if (mode === 'row') {
+            if (mode === 'merge') {
+                // 整個分頁合併成一頁：分頁名稱當標題，所有內容放同一頁
+                const lines = rows
+                    .map(r => (r || []).map(c => (c == null ? '' : String(c)).trim()).filter(Boolean).join('　'))
+                    .filter(Boolean);
+                if (!lines.length) return;
+                add1(cat, lines.join('\n'), cat);
+            } else if (mode === 'row') {
                 rows.forEach(r => {
                     const cells = (r || []).map(c => (c == null ? '' : String(c)).trim()).filter(x => x);
                     if (!cells.length) return;
-                    push(cells.join('\n'), cat);
+                    add1(mkTitle(cells.join('\n')), cells.join('\n'), cat);
                 });
             } else {
                 rows.forEach(r => (r || []).forEach(c => {
                     const cell = (c == null ? '' : String(c)).trim();
-                    if (cell) push(cell, cat);
+                    if (cell) add1(mkTitle(cell), cell, cat);
                 }));
             }
         });
