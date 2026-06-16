@@ -80,6 +80,22 @@
         .editor textarea { resize: vertical; line-height: 1.7; }
         .editor .row-actions { margin-top: 22px; display: flex; gap: 10px; }
         .cat-tag { display: inline-block; background: var(--accent-soft); color: var(--accent-d); font-size: 12px; padding: 3px 12px; border-radius: 20px; }
+        /* 條列項目（檢視）*/
+        .items-view { display: flex; flex-direction: column; gap: 12px; margin-top: 4px; }
+        .item-card { position: relative; border: 1px solid var(--border); border-radius: 10px; padding: 14px 86px 14px 16px; background: #FCFAF5; }
+        .item-t { font-weight: 700; color: var(--ink); margin-bottom: 6px; }
+        .item-b { white-space: pre-wrap; line-height: 1.7; color: var(--ink); }
+        .item-copy { position: absolute; top: 12px; right: 12px; background: var(--accent-soft); color: var(--accent-d); border: none; border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
+        .item-copy:hover { background: var(--accent); color: #fff; }
+        /* 條列項目（編輯）*/
+        .item-edit { border: 1px solid var(--border-strong); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; background: #FCFAF5; }
+        .item-edit-head { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+        .item-edit .it-title { flex: 1; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 6px; font-family: inherit; font-size: 13px; color: var(--ink); background: #fff; }
+        .item-moves { display: flex; gap: 4px; }
+        .item-moves button { width: 28px; height: 28px; border: 1px solid var(--border-strong); background: #fff; border-radius: 6px; cursor: pointer; color: var(--muted); font-size: 13px; line-height: 1; }
+        .item-moves button:hover { border-color: var(--accent); color: var(--accent-d); }
+        .item-moves .it-del:hover { border-color: var(--danger); color: var(--danger); }
+        .item-edit .it-body { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 6px; font-family: inherit; font-size: 13px; line-height: 1.6; resize: vertical; color: var(--ink); background: #fff; }
         /* 搜寻结果 */
         .s-row { display: flex; align-items: center; gap: 14px; text-decoration: none; color: var(--ink);
             padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; transition: .15s; }
@@ -437,12 +453,19 @@
             let rows = s.rows || [];
             if (skip) rows = rows.slice(1);
             if (mode === 'merge') {
-                // 整個分頁合併成一頁：分頁名稱當標題，所有內容放同一頁
-                const lines = rows
-                    .map(r => (r || []).map(c => (c == null ? '' : String(c)).trim()).filter(Boolean).join('　'))
-                    .filter(Boolean);
-                if (!lines.length) return;
-                add1(cat, lines.join('\n'), cat);
+                // 整個分頁＝一頁：分頁名稱當標題；每一列變成一個「項目」
+                const its = rows.map(r => {
+                    const cells = (r || []).map(c => (c == null ? '' : String(c)).trim());
+                    const nonEmpty = cells.filter(Boolean);
+                    if (!nonEmpty.length) return null;
+                    if (cells.length >= 2 && cells[0]) return { t: cells[0], b: cells.slice(1).filter(Boolean).join('\n') };
+                    return { t: '', b: nonEmpty.join('\n') };
+                }).filter(Boolean);
+                if (!its.length) return;
+                const id = Date.now() + added;
+                if (firstId === null) firstId = id;
+                notes.push({ id, title: cat, content: '', items: its, imgs: [], img: '', isPinned: false, category: cat });
+                added++;
             } else if (mode === 'row') {
                 rows.forEach(r => {
                     const cells = (r || []).map(c => (c == null ? '' : String(c)).trim()).filter(x => x);
@@ -823,6 +846,50 @@
         if (used) e.preventDefault();
     }
 
+    /* ===== 結構化條列項目（罐頭語等）===== */
+    let editItems = [];
+    function itemsOf(n) { return Array.isArray(n.items) ? n.items : null; }
+
+    function renderItemsEditor() {
+        const box = document.getElementById('itemsBox');
+        if (!box) return;
+        box.innerHTML = editItems.map((it, i) => `
+            <div class="item-edit">
+                <div class="item-edit-head">
+                    <input type="text" class="it-title" placeholder="標題（可空）" value="${esc(it.t || '')}">
+                    <span class="item-moves">
+                        <button type="button" onclick="moveItem(${i},-1)" title="上移">↑</button>
+                        <button type="button" onclick="moveItem(${i},1)" title="下移">↓</button>
+                        <button type="button" class="it-del" onclick="removeItem(${i})" title="刪除">✕</button>
+                    </span>
+                </div>
+                <textarea class="it-body" rows="3" placeholder="內容">${esc(it.b || '')}</textarea>
+            </div>`).join('');
+    }
+    function syncItemsFromDOM() {
+        const box = document.getElementById('itemsBox');
+        if (!box) return;
+        editItems = [...box.querySelectorAll('.item-edit')].map(r => ({
+            t: r.querySelector('.it-title').value,
+            b: r.querySelector('.it-body').value
+        }));
+    }
+    function addItem() { syncItemsFromDOM(); editItems.push({ t: '', b: '' }); renderItemsEditor(); }
+    function removeItem(i) { syncItemsFromDOM(); editItems.splice(i, 1); renderItemsEditor(); }
+    function moveItem(i, dir) {
+        syncItemsFromDOM();
+        const j = i + dir;
+        if (j < 0 || j >= editItems.length) return;
+        const tmp = editItems[i]; editItems[i] = editItems[j]; editItems[j] = tmp;
+        renderItemsEditor();
+    }
+    function copyItem(id, idx) {
+        const n = notes.find(n => n.id === id);
+        if (!n || !n.items || !n.items[idx]) return;
+        const text = n.items[idx].b || n.items[idx].t || '';
+        if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => setStatus('已複製 ✓')).catch(() => setStatus('複製失敗，請手動選取'));
+    }
+
     function viewNote(id) {
         currentId = id; imgEditActive = false;
         const n = notes.find(n => n.id === id);
@@ -830,12 +897,24 @@
         const tag = n.category
             ? `<span class="cat-tag">🗂️ ${esc(n.category)}</span>`
             : `<span class="cat-tag" style="background:#EEE7DB;color:#9C8C7B">未分類</span>`;
+        const items = itemsOf(n);
+        let body;
+        if (items) {
+            body = `<div class="items-view">` + items.map((it, idx) => `
+                <div class="item-card">
+                    ${it.t ? `<div class="item-t">${esc(it.t)}</div>` : ''}
+                    <div class="item-b">${esc(it.b || '')}</div>
+                    <button class="item-copy" onclick="copyItem(${id},${idx})">複製</button>
+                </div>`).join('') + `</div>`;
+        } else {
+            body = `<div style="line-height:1.85;white-space:pre-wrap;color:#3B2F27">${esc(n.content)}</div>`;
+        }
         const imgHTML = imgsOf(n).map(src =>
             `<img src="${src}" style="max-width:100%; border-radius:8px; margin-top:18px; display:block;">`).join('');
         document.getElementById('contentArea').innerHTML = `
             ${tag}
             <h2 style="margin:10px 0 18px">${n.isPinned ? '📌 ' : ''}${esc(n.title)}</h2>
-            <div style="line-height:1.85;white-space:pre-wrap;color:#3B2F27">${esc(n.content)}</div>
+            ${body}
             ${imgHTML}
             <div style="margin-top:30px;display:flex;gap:10px;">
                 <button class="btn warn" onclick="togglePin()">${n.isPinned ? '取消置頂' : '置頂'}</button>
@@ -884,27 +963,56 @@
         const n = notes.find(n => n.id === currentId);
         if (!n) return;
         editImgs = imgsOf(n).slice(); imgEditActive = true;
-        document.getElementById('contentArea').innerHTML = `
-            <div class="editor">
-                <label>標題</label>
-                <input type="text" id="editTitle" value="${esc(n.title)}">
-                <label>分類</label>
-                <input type="text" id="editCat" list="catList" value="${esc(n.category || '')}" placeholder="留空＝未分類">
-                ${catDatalist()}
-                <label>內容</label>
-                <textarea id="editContent" rows="10">${esc(n.content)}</textarea>
-                ${imgEditorHTML()}
-                <div class="row-actions">
-                    <button class="btn primary" onclick="saveEdit()">保存內容</button>
-                    <button class="btn ghost" onclick="viewNote(${n.id})">取消</button>
-                </div>
-            </div>`;
-        renderImgThumbs(); bindImgDrop();
+        const items = itemsOf(n);
+        if (items) {
+            editItems = items.map(it => ({ t: it.t || '', b: it.b || '' }));
+            document.getElementById('contentArea').innerHTML = `
+                <div class="editor">
+                    <label>頁面標題</label>
+                    <input type="text" id="editTitle" value="${esc(n.title)}">
+                    <label>分類</label>
+                    <input type="text" id="editCat" list="catList" value="${esc(n.category || '')}" placeholder="留空＝未分類">
+                    ${catDatalist()}
+                    <label>項目（↑↓ 調動順序、✕ 刪除）</label>
+                    <div id="itemsBox"></div>
+                    <button type="button" class="btn ghost" style="margin-top:6px" onclick="addItem()">＋ 新增一則</button>
+                    ${imgEditorHTML()}
+                    <div class="row-actions">
+                        <button class="btn primary" onclick="saveEdit()">保存內容</button>
+                        <button class="btn ghost" onclick="viewNote(${n.id})">取消</button>
+                    </div>
+                </div>`;
+            renderItemsEditor(); renderImgThumbs(); bindImgDrop();
+        } else {
+            document.getElementById('contentArea').innerHTML = `
+                <div class="editor">
+                    <label>標題</label>
+                    <input type="text" id="editTitle" value="${esc(n.title)}">
+                    <label>分類</label>
+                    <input type="text" id="editCat" list="catList" value="${esc(n.category || '')}" placeholder="留空＝未分類">
+                    ${catDatalist()}
+                    <label>內容</label>
+                    <textarea id="editContent" rows="10">${esc(n.content)}</textarea>
+                    ${imgEditorHTML()}
+                    <div class="row-actions">
+                        <button class="btn primary" onclick="saveEdit()">保存內容</button>
+                        <button class="btn ghost" onclick="viewNote(${n.id})">取消</button>
+                    </div>
+                </div>`;
+            renderImgThumbs(); bindImgDrop();
+        }
     }
 
     function saveEdit() {
         const title = document.getElementById('editTitle').value.trim() || '(無標題)';
         const category = document.getElementById('editCat').value.trim();
+        if (document.getElementById('itemsBox')) {
+            syncItemsFromDOM();
+            const items = editItems.filter(it => (it.t || '').trim() || (it.b || '').trim());
+            notes = notes.map(n => n.id === currentId ? { ...n, title, category, items, content: '', imgs: editImgs.slice(), img: '' } : n);
+            imgEditActive = false; persist(); render(); viewNote(currentId);
+            return;
+        }
         const content = document.getElementById('editContent').value;
         updateData(title, content, editImgs.slice(), category);
     }
