@@ -6,11 +6,11 @@
     <title>UE 高效知识库</title>
     <style>
         :root {
-            --bg:#F4EEE4; --surface:#FFFFFF; --border:#ECE3D4; --border-strong:#E0D4C0;
-            --ink:#3B2F27; --muted:#9C8C7B; --faint:#B8A998;
-            --accent:#B0876A; --accent-d:#956C4E; --accent-soft:#EFE5D7;
-            --side:#43342B; --side-2:#392B23; --side-line:#564539; --side-ink:#F0E8DD; --side-muted:#B6A593;
-            --danger:#C0573F;
+            --bg:#EFE9DC; --surface:#FAF6EC; --border:#DDD3BE; --border-strong:#C9BDA2;
+            --ink:#2A2723; --muted:#7A7363; --faint:#A79E89;
+            --accent:#2E5A4E; --accent-d:#234A40; --accent-soft:#E3E9E1;
+            --side:#2A332C; --side-2:#222A24; --side-line:#3D463E; --side-ink:#EDE7D8; --side-muted:#A9B0A4;
+            --danger:#8C3A33;
         }
         * { box-sizing: border-box; }
         body { font-family: 'Microsoft JhengHei', 'Noto Sans TC', sans-serif; display: flex; height: 100vh; margin: 0; background: var(--bg); color: var(--ink); }
@@ -20,7 +20,7 @@
         .brand { font-size: 15px; font-weight: 700; letter-spacing: 1px; margin-bottom: 14px; }
         .side-actions { display: flex; gap: 6px; margin-top: 8px; }
         .s-btn { flex: 1; padding: 8px 6px; border: 1px solid var(--side-line); background: transparent; color: var(--side-muted);
-            border-radius: 8px; font-size: 13px; font-family: inherit; cursor: pointer; transition: .15s; white-space: nowrap; }
+            border-radius: 0; font-size: 13px; font-family: inherit; cursor: pointer; transition: .15s; white-space: nowrap; }
         .s-btn:hover { border-color: var(--accent); color: var(--side-ink); }
         .s-btn.primary { flex: none; width: 100%; border: none; background: var(--accent); color: #fff; font-weight: 600; padding: 11px; font-size: 14px; }
         .s-btn.primary:hover { background: var(--accent-d); }
@@ -29,94 +29,94 @@
         .side-foot { margin-top: auto; border-top: 1px solid var(--side-line); padding: 10px 12px 12px; background: var(--side-2); }
         .foot-actions { display: flex; gap: 6px; }
         #listCtrl { padding: 8px 14px; border-bottom: 1px solid var(--side-line); display: flex; justify-content: flex-end; }
-        #collapseToggle { background: transparent; border: 1px solid var(--side-line); color: var(--side-muted); font-size: 12px; padding: 4px 12px; border-radius: 6px; cursor: pointer; transition: .15s; }
+        #collapseToggle { background: transparent; border: 1px solid var(--side-line); color: var(--side-muted); font-size: 12px; padding: 4px 12px; border-radius: 0; cursor: pointer; transition: .15s; }
         #collapseToggle:hover { border-color: var(--accent); color: var(--side-ink); }
         #noteList { flex: 1; overflow-y: auto; }
         .note-item { padding: 12px 16px 12px 28px; border-bottom: 1px solid var(--side-line); cursor: pointer; transition: .15s; display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
         .note-item:hover { background: rgba(255,255,255,.06); }
-        .note-item .pin { color: #E3B341; }
+        .note-item .pin { color: #B0903F; }
         /* 分类分组 */
         .cat-group .cat-header { padding: 11px 14px; background: rgba(0,0,0,.14); color: var(--side-muted); font-size: 12px; font-weight: 700;
             cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;
             border-bottom: 1px solid var(--side-line); letter-spacing: .5px; }
         .cat-group .cat-header:hover { color: var(--side-ink); }
-        .cat-group .cat-header.pinned { color: #E3B341; }
+        .cat-group .cat-header.pinned { color: #B0903F; }
         .cat-group .cat-header.solo { font-weight: 500; color: var(--side-ink); background: transparent; }
         .cat-group .cat-header.solo:hover { background: rgba(255,255,255,.06); color: var(--side-ink); }
         .cat-group .cat-header .left { display: flex; align-items: center; gap: 8px; }
         .cat-group .cat-header .chev { transition: .2s; font-size: 10px; display: inline-block; }
         .cat-group.collapsed .cat-body { display: none; }
         .cat-group.collapsed .chev { transform: rotate(-90deg); }
-        .cat-count { background: var(--accent); color: #fff; border-radius: 10px; padding: 1px 8px; font-size: 11px; min-width: 14px; text-align: center; }
+        .cat-count { background: var(--accent); color: #fff; border-radius: 0; padding: 1px 8px; font-size: 11px; min-width: 14px; text-align: center; }
         .cat-group .cat-header .right { display: flex; align-items: center; gap: 8px; }
         .cat-del { background: transparent; border: none; color: var(--side-muted); cursor: pointer; font-size: 13px; padding: 0 2px; opacity: .5; }
         .cat-del:hover { color: var(--danger); opacity: 1; }
-        .cat-header.pinned .cat-count { background: #E3B341; color: var(--side-2); }
+        .cat-header.pinned .cat-count { background: #B0903F; color: var(--side-2); }
         .empty-hint { padding: 22px 18px; color: var(--side-muted); font-size: 13px; line-height: 1.8; }
         /* 右侧展示区 */
         #main { flex: 1; padding: 28px 44px 48px; overflow-y: auto; }
         /* 云端搜寻栏 */
         #searchBar, #filterBar { display: flex; gap: 10px; align-items: center; background: var(--surface); border: 1px solid var(--border);
-            border-radius: 12px; padding: 7px 7px 7px 16px; box-shadow: 0 2px 10px rgba(67,52,43,.05); margin-bottom: 24px; }
+            border-radius: 0; padding: 7px 7px 7px 16px; box-shadow: 0 2px 10px rgba(67,52,43,.05); margin-bottom: 24px; }
         #searchBar .lbl, #filterBar .lbl { font-size: 15px; color: var(--faint); }
         #searchBar input, #filterBar input { flex: 1; border: 0; outline: none; font-size: 15px; font-family: inherit; color: var(--ink); padding: 9px 0; background: transparent; }
         #searchBar input::placeholder, #filterBar input::placeholder { color: var(--faint); }
-        .card { background: var(--surface); padding: 38px 40px; border-radius: 14px; border: 1px solid var(--border); box-shadow: 0 6px 24px rgba(67,52,43,.06); }
+        .card { background: var(--surface); padding: 38px 40px; border-radius: 0; border: 1px solid var(--border); box-shadow: 0 6px 24px rgba(67,52,43,.06); }
         .card h2 { color: var(--ink); }
         /* 按鈕系統 */
-        .btn { padding: 9px 16px; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-family: inherit; transition: .15s; background: var(--accent-soft); color: var(--ink); }
+        .btn { padding: 9px 16px; border: none; border-radius: 0; cursor: pointer; font-size: 13px; font-family: inherit; transition: .15s; background: var(--accent-soft); color: var(--ink); }
         .btn:hover { filter: brightness(.97); }
         .btn.primary { background: var(--accent); color: #fff; }
         .btn.primary:hover { background: var(--accent-d); filter: none; }
         .btn.secondary { background: var(--accent-soft); color: var(--accent-d); }
         .btn.ghost { background: transparent; border: 1px solid var(--border-strong); color: var(--muted); }
         .btn.ghost:hover { border-color: var(--accent); color: var(--accent-d); filter: none; }
-        .btn.warn { background: #F1E3CF; color: #9A6B2E; }
+        .btn.warn { background: #E7E0CF; color: #6E5A2E; }
         .btn.danger { background: #F3DAD2; color: #A8412B; }
         .btn.danger:hover { background: #EBCABF; filter: none; }
         /* 编辑器 */
         .editor label { display: block; font-size: 13px; color: var(--muted); margin: 16px 0 6px; }
         .editor input[type=text], .editor textarea, .editor select { width: 100%; padding: 11px 13px; border: 1px solid var(--border-strong);
-            border-radius: 8px; font-family: inherit; font-size: 14px; box-sizing: border-box; color: var(--ink); background: var(--surface); }
+            border-radius: 0; font-family: inherit; font-size: 14px; box-sizing: border-box; color: var(--ink); background: var(--surface); }
         .editor input[type=text]:focus, .editor textarea:focus, .editor select:focus { outline: none; border-color: var(--accent); }
         .editor textarea { resize: vertical; line-height: 1.7; }
         .editor .row-actions { margin-top: 22px; display: flex; gap: 10px; }
-        .cat-tag { display: inline-block; background: var(--accent-soft); color: var(--accent-d); font-size: 12px; padding: 3px 12px; border-radius: 20px; }
+        .cat-tag { display: inline-block; background: var(--accent-soft); color: var(--accent-d); font-size: 12px; padding: 3px 12px; border-radius: 0; }
         /* 條列項目（檢視）*/
         .items-view { display: flex; flex-direction: column; gap: 12px; margin-top: 4px; }
         /* 可收合的罐頭語項目（預設收合，點標題展開）*/
         .qlist { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
-        .qitem { border: 1px solid var(--border); border-radius: 10px; background: #FCFAF5; overflow: hidden; }
+        .qitem { border: 1px solid var(--border); border-radius: 0; background: #F5EFE1; overflow: hidden; }
         .qitem-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; cursor: pointer; user-select: none; }
-        .qitem-head:hover { background: #FBF4EA; }
+        .qitem-head:hover { background: #EFE8D8; }
         .qitem-chev { color: var(--muted); font-size: 12px; transition: .2s; flex: none; }
         .qitem.open .qitem-chev { transform: rotate(90deg); }
         .qitem-title { flex: 1; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .qitem-head .item-copy { position: static; flex: none; }
         .qitem-body { display: none; padding: 12px 14px 14px; white-space: pre-wrap; line-height: 1.7; color: var(--ink); border-top: 1px solid var(--border); }
         .qitem.open .qitem-body { display: block; }
-        .item-card { position: relative; border: 1px solid var(--border); border-radius: 10px; padding: 14px 86px 14px 16px; background: #FCFAF5; }
+        .item-card { position: relative; border: 1px solid var(--border); border-radius: 0; padding: 14px 86px 14px 16px; background: #F5EFE1; }
         .item-card.copyable { cursor: pointer; }
-        .item-card.copyable:hover { border-color: var(--accent); background: #FBF4EA; }
-        .item-cat { font-size: 11px; color: var(--accent-d); background: var(--accent-soft); display: inline-block; padding: 1px 8px; border-radius: 10px; margin-bottom: 6px; }
+        .item-card.copyable:hover { border-color: var(--accent); background: #EFE8D8; }
+        .item-cat { font-size: 11px; color: var(--accent-d); background: var(--accent-soft); display: inline-block; padding: 1px 8px; border-radius: 0; margin-bottom: 6px; }
         .item-t { font-weight: 700; color: var(--ink); margin-bottom: 6px; }
         .item-b { white-space: pre-wrap; line-height: 1.7; color: var(--ink); }
-        .item-copy { position: absolute; top: 12px; right: 12px; background: var(--accent-soft); color: var(--accent-d); border: none; border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
+        .item-copy { position: absolute; top: 12px; right: 12px; background: var(--accent-soft); color: var(--accent-d); border: none; border-radius: 0; padding: 6px 12px; font-size: 12px; cursor: pointer; }
         .item-copy:hover { background: var(--accent); color: #fff; }
         /* 條列項目（編輯）*/
-        .item-edit { border: 1px solid var(--border-strong); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; background: #FCFAF5; }
+        .item-edit { border: 1px solid var(--border-strong); border-radius: 0; padding: 10px 12px; margin-bottom: 10px; background: #F5EFE1; }
         .item-edit-head { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
-        .item-edit .it-title { flex: 1; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 6px; font-family: inherit; font-size: 13px; color: var(--ink); background: #fff; }
+        .item-edit .it-title { flex: 1; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 0; font-family: inherit; font-size: 13px; color: var(--ink); background: #fff; }
         .item-moves { display: flex; gap: 4px; }
-        .item-moves button { width: 28px; height: 28px; border: 1px solid var(--border-strong); background: #fff; border-radius: 6px; cursor: pointer; color: var(--muted); font-size: 13px; line-height: 1; }
+        .item-moves button { width: 28px; height: 28px; border: 1px solid var(--border-strong); background: #fff; border-radius: 0; cursor: pointer; color: var(--muted); font-size: 13px; line-height: 1; }
         .item-moves button:hover { border-color: var(--accent); color: var(--accent-d); }
         .item-moves .it-del:hover { border-color: var(--danger); color: var(--danger); }
-        .item-edit .it-body { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 6px; font-family: inherit; font-size: 13px; line-height: 1.6; resize: vertical; color: var(--ink); background: #fff; }
+        .item-edit .it-body { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 0; font-family: inherit; font-size: 13px; line-height: 1.6; resize: vertical; color: var(--ink); background: #fff; }
         /* 搜寻结果 */
         .s-row { display: flex; align-items: center; gap: 14px; text-decoration: none; color: var(--ink);
-            padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; transition: .15s; }
+            padding: 12px 14px; border: 1px solid var(--border); border-radius: 0; margin-bottom: 8px; transition: .15s; }
         .s-row:hover { border-color: var(--accent); background: var(--accent-soft); }
-        .s-ic { flex: none; width: 38px; height: 38px; border-radius: 9px; display: grid; place-items: center; font-size: 19px; background: var(--accent-soft); }
+        .s-ic { flex: none; width: 38px; height: 38px; border-radius: 0; display: grid; place-items: center; font-size: 19px; background: var(--accent-soft); }
         .s-meta { flex: 1; min-width: 0; }
         .s-nm { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .s-sub { font-size: 12px; color: var(--muted); margin-top: 3px; display: flex; gap: 10px; flex-wrap: wrap; }
@@ -127,21 +127,21 @@
         .s-row .open-link { flex: none; text-decoration: none; color: var(--faint); font-size: 18px; padding: 0 4px; }
         .s-row .open-link:hover { color: var(--accent); }
         /* 多圖編輯器 */
-        .img-drop { border: 2px dashed var(--border-strong); border-radius: 10px; padding: 18px; text-align: center; color: var(--muted); font-size: 13px; background: #FBF7F0; }
+        .img-drop { border: 2px dashed var(--border-strong); border-radius: 0; padding: 18px; text-align: center; color: var(--muted); font-size: 13px; background: #F5EFE1; }
         .img-drop.drag { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-d); }
         .img-pick { color: var(--accent-d); cursor: pointer; text-decoration: underline; }
         .img-thumbs { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
-        .img-thumb { position: relative; width: 96px; height: 96px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-strong); }
+        .img-thumb { position: relative; width: 96px; height: 96px; border-radius: 0; overflow: hidden; border: 1px solid var(--border-strong); }
         .img-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-        .img-thumb .img-x { position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; border: none; border-radius: 50%; background: rgba(0,0,0,.55); color: #fff; cursor: pointer; font-size: 12px; line-height: 1; }
+        .img-thumb .img-x { position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; border: none; border-radius: 0; background: rgba(0,0,0,.55); color: #fff; cursor: pointer; font-size: 12px; line-height: 1; }
         .img-thumb .img-x:hover { background: var(--danger); }
         /* 密碼鎖 */
         #lockScreen { position: fixed; inset: 0; z-index: 9999; background: var(--side); display: flex; align-items: center; justify-content: center; }
-        .lock-box { background: var(--side-2); padding: 38px 34px; border-radius: 16px; width: 280px; text-align: center; box-shadow: 0 24px 60px rgba(0,0,0,.4); }
+        .lock-box { background: var(--side-2); padding: 38px 34px; border-radius: 0; width: 280px; text-align: center; box-shadow: 0 24px 60px rgba(0,0,0,.4); }
         .lock-title { color: var(--side-ink); font-size: 18px; font-weight: 700; margin-bottom: 22px; letter-spacing: 1px; }
-        .lock-box input { width: 100%; box-sizing: border-box; padding: 12px 14px; border: 1px solid var(--side-line); border-radius: 8px; background: var(--side); color: var(--side-ink); font-size: 15px; font-family: inherit; outline: none; }
+        .lock-box input { width: 100%; box-sizing: border-box; padding: 12px 14px; border: 1px solid var(--side-line); border-radius: 0; background: var(--side); color: var(--side-ink); font-size: 15px; font-family: inherit; outline: none; }
         .lock-box input:focus { border-color: var(--accent); }
-        .lock-box button { width: 100%; margin-top: 14px; padding: 12px; border: none; border-radius: 8px; background: var(--accent); color: #fff; font-size: 15px; cursor: pointer; }
+        .lock-box button { width: 100%; margin-top: 14px; padding: 12px; border: none; border-radius: 0; background: var(--accent); color: #fff; font-size: 15px; cursor: pointer; }
         .lock-box button:hover { background: var(--accent-d); }
         #lockMsg { color: #E9A18E; font-size: 13px; min-height: 18px; margin-top: 12px; }
     </style>
@@ -422,7 +422,7 @@
     function sheetsApiHelp() {
         return `<h2>需要先開啟「Google Sheets API」</h2>
             <p style="line-height:1.8;color:#566573">要照「分頁」分類，程式必須讀取試算表的<b>每一個分頁</b>，這需要在你的 Google Cloud 專案開啟一次 <b>Google Sheets API</b>（免費，只做一次）。步驟：</p>
-            <ol style="line-height:2;color:#3B2F27">
+            <ol style="line-height:2;color:#2A2723">
                 <li>開啟 <a href="https://console.cloud.google.com/apis/library/sheets.googleapis.com" target="_blank" rel="noopener">Google Sheets API 啟用頁</a></li>
                 <li>確認左上角的「專案」是這個 App 在用的同一個專案</li>
                 <li>按藍色的「啟用 / Enable」</li>
@@ -431,20 +431,20 @@
     }
 
     function renderSheetMapping2(sheets, name) {
-        const selStyle = 'width:100%;padding:10px;border:1px solid #E0D4C0;border-radius:8px;font-family:inherit;font-size:14px;color:#3B2F27';
-        const list = sheets.map(s => `<li>${esc(s.title)}　<span style="color:#9C8C7B">（${s.rows.length} 列）</span></li>`).join('');
+        const selStyle = 'width:100%;padding:10px;border:1px solid #C9BDA2;border-radius:0;font-family:inherit;font-size:14px;color:#2A2723';
+        const list = sheets.map(s => `<li>${esc(s.title)}　<span style="color:#7A7363">（${s.rows.length} 列）</span></li>`).join('');
         document.getElementById('contentArea').innerHTML = `
             <div class="editor">
                 <h2 style="margin-top:0">匯入試算表：${esc(name)}</h2>
-                <p style="color:#9C8C7B;font-size:13px">找到 <b>${sheets.length}</b> 個分頁：</p>
-                <ul style="line-height:1.9;color:#3B2F27;margin:6px 0 14px;padding-left:22px">${list}</ul>
+                <p style="color:#7A7363;font-size:13px">找到 <b>${sheets.length}</b> 個分頁：</p>
+                <ul style="line-height:1.9;color:#2A2723;margin:6px 0 14px;padding-left:22px">${list}</ul>
                 <label>匯入方式</label>
                 <select id="sheetCellMode" style="${selStyle}">
                     <option value="merge" selected>整個分頁＝一頁筆記（分頁名稱當標題，內容全放同一頁）</option>
                     <option value="row">每一列＝一則（分頁名稱當分類）</option>
                     <option value="cell">每個儲存格＝一則（分頁名稱當分類）</option>
                 </select>
-                <label style="display:flex;align-items:center;gap:8px;margin-top:16px;cursor:pointer;color:#9C8C7B">
+                <label style="display:flex;align-items:center;gap:8px;margin-top:16px;cursor:pointer;color:#7A7363">
                     <input type="checkbox" id="sheetSkipHeader"> 略過每個分頁的第一列（如果第一列是欄位標題）
                 </label>
                 <div class="row-actions">
@@ -509,14 +509,14 @@
         const opt = (sel) => { let s = ''; for (let k = 0; k < cols; k++) s += `<option value="${k}" ${k === sel ? 'selected' : ''}>${colLabel(k)}</option>`; return s; };
         const catOpt = () => { let s = '<option value="-1" selected>（不指定，全部歸到「匯入」）</option>'; for (let k = 0; k < cols; k++) s += `<option value="${k}">${colLabel(k)}</option>`; return s; };
         const prev = rows.slice(0, 4).map(r => '<tr>' + Array.from({ length: cols }, (_, k) =>
-            '<td style="border:1px solid #E0D4C0;padding:5px 8px;font-size:12px;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(String(r[k] ?? '')) + '</td>').join('') + '</tr>').join('');
-        const selStyle = 'width:100%;padding:10px;border:1px solid #E0D4C0;border-radius:8px;font-family:inherit;font-size:14px;color:#3B2F27';
+            '<td style="border:1px solid #C9BDA2;padding:5px 8px;font-size:12px;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(String(r[k] ?? '')) + '</td>').join('') + '</tr>').join('');
+        const selStyle = 'width:100%;padding:10px;border:1px solid #C9BDA2;border-radius:0;font-family:inherit;font-size:14px;color:#2A2723';
         document.getElementById('contentArea').innerHTML = `
             <div class="editor">
                 <h2 style="margin-top:0">匯入試算表：${esc(name)}</h2>
                 <p style="color:#7f8c8d;font-size:13px">共 ${rows.length} 列、${cols} 欄。</p>
                 <div style="overflow-x:auto;margin:8px 0 2px"><table style="border-collapse:collapse">${prev}</table></div>
-                <p style="color:#9C8C7B;font-size:12px;margin:0 0 4px">↑ 預覽前幾列</p>
+                <p style="color:#7A7363;font-size:12px;margin:0 0 4px">↑ 預覽前幾列</p>
                 <label>匯入方式</label>
                 <select id="importMode" style="${selStyle}" onchange="toggleImportMode()">
                     <option value="cell" selected>每格＝一則（最上面那列當分類名稱）｜適合罐頭語</option>
@@ -812,7 +812,7 @@
     /* ============ 查看 / 编辑 / 新增 ============ */
     function welcomeHTML() {
         return `<h2 style="margin-top:0">UE 知識庫</h2>
-            <p style="line-height:1.9;color:#9C8C7B">
+            <p style="line-height:1.9;color:#7A7363">
             ・ 上方<b>篩選框</b>打字 → 立刻列出符合的罐頭語，點卡片即可<b>複製</b>。<br>
             ・ 左側點<b>分類</b>可看整頁內容。<br>
             ・ 第一次用、或要更新資料：右上「<b>☁ 雲端</b>」搜尋並匯入你的試算表，再按底部「<b>同步</b>」存回雲端。</p>`;
@@ -842,7 +842,7 @@
         });
         window._filterHits = hits;
         if (!hits.length) { area.innerHTML = `<div class="s-empty">找不到含「${esc(raw)}」的內容</div>`; return; }
-        area.innerHTML = `<p style="color:#9C8C7B;font-size:13px;margin:0 0 14px">符合「${esc(raw)}」的 ${hits.length} 則 — 點卡片即可複製</p>
+        area.innerHTML = `<p style="color:#7A7363;font-size:13px;margin:0 0 14px">符合「${esc(raw)}」的 ${hits.length} 則 — 點卡片即可複製</p>
             <div class="items-view">` +
             hits.map((h, i) => `
                 <div class="item-card copyable" onclick="copyHit(${i})">
@@ -869,7 +869,7 @@
                 <input id="q" type="text" placeholder="搜尋 Google Drive 的試算表或文件，按 Enter" autocomplete="off" onkeydown="if(event.key==='Enter')searchDrive()">
                 <button class="btn primary" onclick="searchDrive()">搜尋</button>
             </div>
-            <p style="color:#9C8C7B;font-size:13px;line-height:1.7">找到檔案後按「📥 匯入成筆記」即可加進來。試算表會依分頁變成一頁一頁的條列卡片。</p>`;
+            <p style="color:#7A7363;font-size:13px;line-height:1.7">找到檔案後按「📥 匯入成筆記」即可加進來。試算表會依分頁變成一頁一頁的條列卡片。</p>`;
         const i = document.getElementById('q'); if (i) i.focus();
     }
 
@@ -972,7 +972,7 @@
         if (!n) { showWelcome(); return; }
         const tag = n.category
             ? `<span class="cat-tag">🗂️ ${esc(n.category)}</span>`
-            : `<span class="cat-tag" style="background:#EEE7DB;color:#9C8C7B">未分類</span>`;
+            : `<span class="cat-tag" style="background:#E7E0CF;color:#7A7363">未分類</span>`;
         const items = itemsOf(n);
         let body;
         if (items) {
@@ -988,10 +988,10 @@
                 </div>`;
             }).join('') + `</div>`;
         } else {
-            body = `<div style="line-height:1.85;white-space:pre-wrap;color:#3B2F27">${esc(n.content)}</div>`;
+            body = `<div style="line-height:1.85;white-space:pre-wrap;color:#2A2723">${esc(n.content)}</div>`;
         }
         const imgHTML = imgsOf(n).map(src =>
-            `<img src="${src}" style="max-width:100%; border-radius:8px; margin-top:18px; display:block;">`).join('');
+            `<img src="${src}" style="max-width:100%; border-radius:0; margin-top:18px; display:block;">`).join('');
         document.getElementById('contentArea').innerHTML = `
             ${tag}
             <h2 style="margin:10px 0 18px">${n.isPinned ? '📌 ' : ''}${esc(n.title)}</h2>
