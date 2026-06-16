@@ -39,6 +39,8 @@
             border-bottom: 1px solid var(--side-line); letter-spacing: .5px; }
         .cat-group .cat-header:hover { color: var(--side-ink); }
         .cat-group .cat-header.pinned { color: #E3B341; }
+        .cat-group .cat-header.solo { font-weight: 500; color: var(--side-ink); background: transparent; }
+        .cat-group .cat-header.solo:hover { background: rgba(255,255,255,.06); color: var(--side-ink); }
         .cat-group .cat-header .left { display: flex; align-items: center; gap: 8px; }
         .cat-group .cat-header .chev { transition: .2s; font-size: 10px; display: inline-block; }
         .cat-group.collapsed .cat-body { display: none; }
@@ -671,8 +673,17 @@
     function updateCollapseToggle() {
         const btn = document.getElementById('collapseToggle');
         if (!btn) return;
+        // 是否有可收合的群組（置頂、或含多頁、或單頁但標題不等於分類名）
+        let collapsible = notes.some(n => n.isPinned);
+        if (!collapsible) {
+            for (const cat of [...uniqueCats(), '']) {
+                const items = notes.filter(n => !n.isPinned && (n.category || '') === cat);
+                if (items.length > 1) { collapsible = true; break; }
+                if (items.length === 1 && items[0].title !== (cat || '未分類')) { collapsible = true; break; }
+            }
+        }
+        btn.style.visibility = collapsible ? 'visible' : 'hidden';
         const keys = allCatKeys();
-        btn.style.visibility = keys.length ? 'visible' : 'hidden';
         const allCol = keys.length > 0 && keys.every(k => collapsed.has(k));
         btn.textContent = allCol ? '展開全部' : '收合全部';
     }
@@ -686,6 +697,15 @@
     function groupHTML(key, name, items, pinned) {
         const col = collapsed.has(key);
         const del = pinned ? '' : `<button class="cat-del" data-key="${esc(key)}" title="刪除此分類所有筆記">🗑</button>`;
+        // 單頁分類：整類只有一頁、且標題＝分類名 → 直接點標題開啟，不再多列一條
+        if (!pinned && items.length === 1 && items[0].title === name) {
+            return `<div class="cat-group">
+                <div class="cat-header solo" data-open="${items[0].id}">
+                    <span class="left">${esc(name)}</span>
+                    <span class="right">${del}</span>
+                </div>
+            </div>`;
+        }
         return `<div class="cat-group ${col ? 'collapsed' : ''}">
             <div class="cat-header ${pinned ? 'pinned' : ''}" data-key="${esc(key)}">
                 <span class="left"><span class="chev">▾</span>${esc(name)}</span>
@@ -742,6 +762,8 @@
     document.getElementById('noteList').addEventListener('click', e => {
         const del = e.target.closest('.cat-del');
         if (del) { e.stopPropagation(); deleteCategory(del.dataset.key); return; }
+        const open = e.target.closest('.cat-header.solo');
+        if (open) { viewNote(+open.dataset.open); return; }
         const h = e.target.closest('.cat-header');
         if (h) toggleCat(h.dataset.key);
     });
