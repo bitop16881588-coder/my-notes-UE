@@ -25,7 +25,9 @@
         .s-btn.primary { flex: none; width: 100%; border: none; background: var(--accent); color: #fff; font-weight: 600; padding: 11px; font-size: 14px; }
         .s-btn.primary:hover { background: var(--accent-d); }
         .s-btn.danger:hover { border-color: var(--danger); color: #F2C4B8; }
-        #syncStatus { font-size: 11px; color: var(--side-muted); padding: 9px 16px; border-bottom: 1px solid var(--side-line); }
+        #syncStatus { font-size: 11px; color: var(--side-muted); padding: 8px 4px 2px; }
+        .side-foot { margin-top: auto; border-top: 1px solid var(--side-line); padding: 10px 12px 12px; background: var(--side-2); }
+        .foot-actions { display: flex; gap: 6px; }
         #listCtrl { padding: 8px 14px; border-bottom: 1px solid var(--side-line); display: flex; justify-content: flex-end; }
         #collapseToggle { background: transparent; border: 1px solid var(--side-line); color: var(--side-muted); font-size: 12px; padding: 4px 12px; border-radius: 6px; cursor: pointer; transition: .15s; }
         #collapseToggle:hover { border-color: var(--accent); color: var(--side-ink); }
@@ -54,11 +56,11 @@
         /* 右侧展示区 */
         #main { flex: 1; padding: 28px 44px 48px; overflow-y: auto; }
         /* 云端搜寻栏 */
-        #searchBar { display: flex; gap: 10px; align-items: center; background: var(--surface); border: 1px solid var(--border);
+        #searchBar, #filterBar { display: flex; gap: 10px; align-items: center; background: var(--surface); border: 1px solid var(--border);
             border-radius: 12px; padding: 7px 7px 7px 16px; box-shadow: 0 2px 10px rgba(67,52,43,.05); margin-bottom: 24px; }
-        #searchBar .lbl { font-size: 15px; color: var(--faint); }
-        #searchBar input { flex: 1; border: 0; outline: none; font-size: 15px; font-family: inherit; color: var(--ink); padding: 9px 0; background: transparent; }
-        #searchBar input::placeholder { color: var(--faint); }
+        #searchBar .lbl, #filterBar .lbl { font-size: 15px; color: var(--faint); }
+        #searchBar input, #filterBar input { flex: 1; border: 0; outline: none; font-size: 15px; font-family: inherit; color: var(--ink); padding: 9px 0; background: transparent; }
+        #searchBar input::placeholder, #filterBar input::placeholder { color: var(--faint); }
         .card { background: var(--surface); padding: 38px 40px; border-radius: 14px; border: 1px solid var(--border); box-shadow: 0 6px 24px rgba(67,52,43,.06); }
         .card h2 { color: var(--ink); }
         /* 按鈕系統 */
@@ -83,6 +85,9 @@
         /* 條列項目（檢視）*/
         .items-view { display: flex; flex-direction: column; gap: 12px; margin-top: 4px; }
         .item-card { position: relative; border: 1px solid var(--border); border-radius: 10px; padding: 14px 86px 14px 16px; background: #FCFAF5; }
+        .item-card.copyable { cursor: pointer; }
+        .item-card.copyable:hover { border-color: var(--accent); background: #FBF4EA; }
+        .item-cat { font-size: 11px; color: var(--accent-d); background: var(--accent-soft); display: inline-block; padding: 1px 8px; border-radius: 10px; margin-bottom: 6px; }
         .item-t { font-weight: 700; color: var(--ink); margin-bottom: 6px; }
         .item-b { white-space: pre-wrap; line-height: 1.7; color: var(--ink); }
         .item-copy { position: absolute; top: 12px; right: 12px; background: var(--accent-soft); color: var(--accent-d); border: none; border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
@@ -145,23 +150,25 @@
     <div class="side-head">
         <div class="brand">UE 知識庫</div>
         <button class="s-btn primary" onclick="newNote()">＋ 新增筆記</button>
-        <div class="side-actions">
-            <button class="s-btn" onclick="syncToCloud()">同步</button>
-            <button class="s-btn" onclick="pullFromCloud()">刷新</button>
-            <button class="s-btn danger" onclick="clearAllNotes()">清空</button>
-            <button class="s-btn" onclick="lockApp()" title="鎖定">🔒</button>
-        </div>
     </div>
-    <div id="syncStatus">尚未登入 Google</div>
     <div id="listCtrl"><button id="collapseToggle" onclick="toggleAllCats()">收合全部</button></div>
     <div id="noteList"></div>
+    <div class="side-foot">
+        <div class="foot-actions">
+            <button class="s-btn" onclick="syncToCloud()">同步</button>
+            <button class="s-btn" onclick="pullFromCloud()">刷新</button>
+            <button class="s-btn" onclick="clearAllNotes()" title="清空全部">清空</button>
+            <button class="s-btn" onclick="lockApp()" title="鎖定">🔒</button>
+        </div>
+        <div id="syncStatus">尚未登入 Google</div>
+    </div>
 </div>
 
 <div id="main">
-    <div id="searchBar">
+    <div id="filterBar">
         <span class="lbl">🔍</span>
-        <input id="q" type="text" placeholder="搜尋你 Google Drive 的檔名或內容，按 Enter" autocomplete="off">
-        <button class="btn primary" onclick="searchDrive()">搜尋</button>
+        <input id="filterInput" type="text" placeholder="篩選罐頭語…打字即時搜尋，點卡片即可複製" autocomplete="off" oninput="runFilter()">
+        <button class="btn ghost" onclick="openCloud()">☁ 雲端</button>
     </div>
     <div id="contentArea" class="card"></div>
 </div>
@@ -793,11 +800,67 @@
 
     /* ============ 查看 / 编辑 / 新增 ============ */
     function welcomeHTML() {
-        return `<h2>歡迎使用 UE 知識庫</h2>
-            <p style="line-height:1.8;color:#566573">左側依分類點選筆記即可讀取或編輯；按「新建」可建立筆記並指定分類。<br>
-            上方搜尋欄可搜尋你 Google Drive 裡的檔案與內容。第一次使用會請你登入 Google。</p>`;
+        return `<h2 style="margin-top:0">UE 知識庫</h2>
+            <p style="line-height:1.9;color:#9C8C7B">
+            ・ 上方<b>篩選框</b>打字 → 立刻列出符合的罐頭語，點卡片即可<b>複製</b>。<br>
+            ・ 左側點<b>分類</b>可看整頁內容。<br>
+            ・ 第一次用、或要更新資料：右上「<b>☁ 雲端</b>」搜尋並匯入你的試算表，再按底部「<b>同步</b>」存回雲端。</p>`;
     }
     function showWelcome(){ currentId = null; imgEditActive = false; document.getElementById('contentArea').innerHTML = welcomeHTML(); }
+
+    /* ===== 即時篩選罐頭語（打字即時、點卡片複製）===== */
+    function runFilter() {
+        const el = document.getElementById('filterInput');
+        const raw = el ? el.value.trim() : '';
+        const q = raw.toLowerCase();
+        const area = document.getElementById('contentArea');
+        if (!q) { showWelcome(); return; }
+        const hits = [];
+        notes.forEach(n => {
+            const cat = n.category || '未分類';
+            const items = itemsOf(n);
+            if (items) {
+                items.forEach(it => {
+                    const t = it.t || '', b = it.b || '';
+                    if ((t + '\n' + b + '\n' + cat).toLowerCase().includes(q)) hits.push({ cat, t, b });
+                });
+            } else {
+                const t = n.title || '', b = n.content || '';
+                if ((t + '\n' + b + '\n' + cat).toLowerCase().includes(q)) hits.push({ cat, t, b });
+            }
+        });
+        window._filterHits = hits;
+        if (!hits.length) { area.innerHTML = `<div class="s-empty">找不到含「${esc(raw)}」的內容</div>`; return; }
+        area.innerHTML = `<p style="color:#9C8C7B;font-size:13px;margin:0 0 14px">符合「${esc(raw)}」的 ${hits.length} 則 — 點卡片即可複製</p>
+            <div class="items-view">` +
+            hits.map((h, i) => `
+                <div class="item-card copyable" onclick="copyHit(${i})">
+                    <div class="item-cat">${esc(h.cat)}</div>
+                    ${h.t ? `<div class="item-t">${esc(h.t)}</div>` : ''}
+                    <div class="item-b">${esc(h.b)}</div>
+                    <button class="item-copy" onclick="event.stopPropagation();copyHit(${i})">複製</button>
+                </div>`).join('') + `</div>`;
+    }
+    function copyHit(i) {
+        const h = (window._filterHits || [])[i];
+        if (!h) return;
+        const text = h.b || h.t || '';
+        if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => setStatus('已複製 ✓')).catch(() => setStatus('複製失敗，請手動選取'));
+    }
+
+    /* 雲端搜尋 / 匯入面板（要用才開）*/
+    function openCloud() {
+        imgEditActive = false;
+        document.getElementById('contentArea').innerHTML = `
+            <h2 style="margin-top:0">雲端搜尋 / 匯入</h2>
+            <div id="searchBar" style="margin-top:14px">
+                <span class="lbl">🔍</span>
+                <input id="q" type="text" placeholder="搜尋 Google Drive 的試算表或文件，按 Enter" autocomplete="off" onkeydown="if(event.key==='Enter')searchDrive()">
+                <button class="btn primary" onclick="searchDrive()">搜尋</button>
+            </div>
+            <p style="color:#9C8C7B;font-size:13px;line-height:1.7">找到檔案後按「📥 匯入成筆記」即可加進來。試算表會依分頁變成一頁一頁的條列卡片。</p>`;
+        const i = document.getElementById('q'); if (i) i.focus();
+    }
 
     /* 取得一篇筆記的圖片陣列（相容舊的單張 img 欄位）*/
     function imgsOf(n) {
@@ -1035,8 +1098,6 @@
         }
     }
 
-    // Enter 键搜寻
-    document.getElementById('q').addEventListener('keydown', e => { if (e.key === 'Enter') searchDrive(); });
     // 編輯時 Ctrl+V 貼上圖片
     document.addEventListener('paste', onPasteImage);
     // 密碼鎖：Enter 進入 + 啟動檢查
