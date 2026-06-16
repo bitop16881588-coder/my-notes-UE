@@ -84,6 +84,17 @@
         .cat-tag { display: inline-block; background: var(--accent-soft); color: var(--accent-d); font-size: 12px; padding: 3px 12px; border-radius: 20px; }
         /* 條列項目（檢視）*/
         .items-view { display: flex; flex-direction: column; gap: 12px; margin-top: 4px; }
+        /* 可收合的罐頭語項目（預設收合，點標題展開）*/
+        .qlist { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+        .qitem { border: 1px solid var(--border); border-radius: 10px; background: #FCFAF5; overflow: hidden; }
+        .qitem-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; cursor: pointer; user-select: none; }
+        .qitem-head:hover { background: #FBF4EA; }
+        .qitem-chev { color: var(--muted); font-size: 12px; transition: .2s; flex: none; }
+        .qitem.open .qitem-chev { transform: rotate(90deg); }
+        .qitem-title { flex: 1; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .qitem-head .item-copy { position: static; flex: none; }
+        .qitem-body { display: none; padding: 12px 14px 14px; white-space: pre-wrap; line-height: 1.7; color: var(--ink); border-top: 1px solid var(--border); }
+        .qitem.open .qitem-body { display: block; }
         .item-card { position: relative; border: 1px solid var(--border); border-radius: 10px; padding: 14px 86px 14px 16px; background: #FCFAF5; }
         .item-card.copyable { cursor: pointer; }
         .item-card.copyable:hover { border-color: var(--accent); background: #FBF4EA; }
@@ -946,6 +957,8 @@
         const tmp = editItems[i]; editItems[i] = editItems[j]; editItems[j] = tmp;
         renderItemsEditor();
     }
+    function toggleQ(head) { head.parentElement.classList.toggle('open'); }
+
     function copyItem(id, idx) {
         const n = notes.find(n => n.id === id);
         if (!n || !n.items || !n.items[idx]) return;
@@ -963,12 +976,17 @@
         const items = itemsOf(n);
         let body;
         if (items) {
-            body = `<div class="items-view">` + items.map((it, idx) => `
-                <div class="item-card">
-                    ${it.t ? `<div class="item-t">${esc(it.t)}</div>` : ''}
-                    <div class="item-b">${esc(it.b || '')}</div>
-                    <button class="item-copy" onclick="copyItem(${id},${idx})">複製</button>
-                </div>`).join('') + `</div>`;
+            body = `<div class="qlist">` + items.map((it, idx) => {
+                const label = (it.t || '').trim() || ((it.b || '').split('\n')[0].slice(0, 40)) || '（無標題）';
+                return `<div class="qitem">
+                    <div class="qitem-head" onclick="toggleQ(this)">
+                        <span class="qitem-chev">▸</span>
+                        <span class="qitem-title">${esc(label)}</span>
+                        <button class="item-copy" onclick="event.stopPropagation();copyItem(${id},${idx})">複製</button>
+                    </div>
+                    <div class="qitem-body">${esc(it.b || '')}</div>
+                </div>`;
+            }).join('') + `</div>`;
         } else {
             body = `<div style="line-height:1.85;white-space:pre-wrap;color:#3B2F27">${esc(n.content)}</div>`;
         }
