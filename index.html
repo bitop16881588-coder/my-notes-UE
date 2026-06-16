@@ -994,14 +994,14 @@
             `<img src="${src}" style="max-width:100%; border-radius:0; margin-top:18px; display:block;">`).join('');
         document.getElementById('contentArea').innerHTML = `
             ${tag}
-            <h2 style="margin:10px 0 18px">${n.isPinned ? '📌 ' : ''}${esc(n.title)}</h2>
-            ${body}
-            ${imgHTML}
-            <div style="margin-top:30px;display:flex;gap:10px;">
+            <h2 style="margin:10px 0 14px">${n.isPinned ? '📌 ' : ''}${esc(n.title)}</h2>
+            <div style="margin:0 0 22px;display:flex;gap:10px;">
                 <button class="btn warn" onclick="togglePin()">${n.isPinned ? '取消置頂' : '置頂'}</button>
                 <button class="btn secondary" onclick="editMode()">編輯</button>
                 <button class="btn danger" onclick="deleteNote()">刪除</button>
-            </div>`;
+            </div>
+            ${body}
+            ${imgHTML}`;
     }
 
     function catDatalist() {
