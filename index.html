@@ -142,6 +142,10 @@
         .box-edit-head { display: flex; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 6px; }
         .box-no { font-size: 12px; color: var(--accent-d); font-weight: 700; }
         .box-edit .box-b { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 0; font-family: inherit; font-size: 13px; line-height: 1.6; resize: vertical; color: var(--ink); background: #fff; }
+        .box-drop { margin-top: 6px; border: 2px dashed var(--border-strong); padding: 8px 10px; text-align: center; color: var(--muted); font-size: 12px; background: #fff; cursor: pointer; }
+        .box-drop.drag { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-d); }
+        .box-imgs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+        .qbox-img { max-width: 100%; display: block; margin-top: 8px; border: 1px solid var(--border); }
         /* 搜寻结果 */
         .s-row { display: flex; align-items: center; gap: 14px; text-decoration: none; color: var(--ink);
             padding: 12px 14px; border: 1px solid var(--border); border-radius: 0; margin-bottom: 8px; transition: .15s; }
@@ -855,7 +859,7 @@
             ・ 左側點<b>分類</b>可看整頁內容。<br>
             ・ 第一次用、或要更新資料：右上「<b>☁ 雲端</b>」搜尋並匯入你的試算表，再按底部「<b>同步</b>」存回雲端。</p>`;
     }
-    function showWelcome(){ currentId = null; imgEditActive = false; document.getElementById('contentArea').innerHTML = welcomeHTML(); }
+    function showWelcome(){ currentId = null; imgEditActive = false; boxEditMode = false; document.getElementById('contentArea').innerHTML = welcomeHTML(); }
 
     /* ===== 即時篩選罐頭語（打字即時、點卡片複製）===== */
     function runFilter() {
@@ -949,6 +953,13 @@
         dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('drag'); addImgFiles(e.dataTransfer.files); });
     }
     function onPasteImage(e) {
+        if (boxEditMode && boxImgTarget >= 0) {
+            const items = (e.clipboardData || {}).items || [];
+            for (const it of items) {
+                if (it.type && it.type.startsWith('image/')) { const f = it.getAsFile(); if (f) { addBoxImgFiles(boxImgTarget, [f]); e.preventDefault(); return; } }
+            }
+            return;
+        }
         if (!imgEditActive) return;
         const items = (e.clipboardData || {}).items || [];
         let used = false;
@@ -960,16 +971,39 @@
 
     /* ===== 結構化條列項目（罐頭語等）===== */
     let editItems = [];
-    let editBoxes = [];
+    let editBoxes = [];        // [{b, imgs:[]}]
+    let boxEditMode = false;   // 是否正在編輯區塊（決定貼圖去向）
+    let boxImgTarget = -1;     // 目前作用中的區塊（貼圖目標）
     function itemsOf(n) { return Array.isArray(n.items) ? n.items : null; }
-    function boxesOf(it) { return Array.isArray(it.boxes) ? it.boxes : (it.b ? [it.b] : ['']); }
     function imgsOfItem(it) { return Array.isArray(it.imgs) ? it.imgs : []; }
+    function boxesOf(it) {
+        let arr;
+        if (Array.isArray(it.boxes)) {
+            arr = it.boxes.map(b => typeof b === 'string'
+                ? { b: b, imgs: [] }
+                : { b: b.b || '', imgs: Array.isArray(b.imgs) ? b.imgs.slice() : [] });
+        } else if (it.b) {
+            arr = [{ b: it.b, imgs: [] }];
+        } else {
+            arr = [];
+        }
+        // 舊的「整則圖片」併入第一個區塊（存檔後會清掉整則圖片，不會重複）
+        const itImgs = imgsOfItem(it);
+        if (itImgs.length) {
+            if (!arr.length) arr = [{ b: '', imgs: [] }];
+            arr[0] = { b: arr[0].b, imgs: itImgs.concat(arr[0].imgs) };
+        }
+        return arr.length ? arr : [{ b: '', imgs: [] }];
+    }
 
     /* 頁面層級：項目清單（改標題、排序、刪除；內容用各則 ⋯→編輯）*/
     function renderItemsEditor() {
         const box = document.getElementById('itemsBox');
         if (!box) return;
-        box.innerHTML = editItems.map((it, i) => `
+        box.innerHTML = editItems.map((it, i) => {
+            const bs = boxesOf(it);
+            const nImg = bs.reduce((s, b) => s + b.imgs.length, 0);
+            return `
             <div class="item-edit">
                 <div class="item-edit-head">
                     <input type="text" class="it-title" placeholder="標題（可空）" value="${esc(it.t || '')}" oninput="setItemTitle(${i}, this.value)">
@@ -979,11 +1013,12 @@
                         <button type="button" class="it-del" onclick="removeItem(${i})" title="刪除">✕</button>
                     </span>
                 </div>
-                <div class="item-edit-sub">${boxesOf(it).filter(b => (b || '').trim()).length} 個區塊・${imgsOfItem(it).length} 張圖（內容用各則的「⋯ → 編輯」調整）</div>
-            </div>`).join('');
+                <div class="item-edit-sub">${bs.filter(b => (b.b || '').trim() || b.imgs.length).length} 個區塊・${nImg} 張圖（內容/圖片用各則的「⋯ → 編輯」調整）</div>
+            </div>`;
+        }).join('');
     }
     function setItemTitle(i, v) { if (editItems[i]) editItems[i].t = v; }
-    function addItem() { editItems.push({ t: '', boxes: [''], imgs: [] }); renderItemsEditor(); }
+    function addItem() { editItems.push({ t: '', boxes: [{ b: '', imgs: [] }], imgs: [] }); renderItemsEditor(); }
     function removeItem(i) { editItems.splice(i, 1); renderItemsEditor(); }
     function moveItem(i, dir) {
         const j = i + dir;
@@ -992,12 +1027,12 @@
         renderItemsEditor();
     }
 
-    /* 單則內的「區塊」編輯（可新增、↑↓、刪除）*/
+    /* 單則內的「區塊」編輯：每個區塊各自有文字＋圖片，可新增、↑↓、刪除 */
     function renderBoxesEditor() {
         const box = document.getElementById('boxesBox');
         if (!box) return;
         box.innerHTML = editBoxes.map((b, i) => `
-            <div class="box-edit">
+            <div class="box-edit" data-i="${i}">
                 <div class="box-edit-head">
                     <span class="box-no">區塊 ${i + 1}</span>
                     <span class="item-moves">
@@ -1006,16 +1041,40 @@
                         <button type="button" class="it-del" onclick="removeBox(${i})" title="刪除">✕</button>
                     </span>
                 </div>
-                <textarea class="box-b" rows="3" placeholder="這一區塊的內容…（可從試算表貼上表格）">${esc(b)}</textarea>
+                <textarea class="box-b" rows="3" placeholder="這一區塊的內容…（可從試算表貼上表格）" onfocus="boxImgTarget=${i}">${esc(b.b)}</textarea>
+                <div class="box-drop" data-i="${i}" onclick="boxImgTarget=${i}">＋圖片：拖曳到這 / 點此再按 Ctrl+V 貼上 /
+                    <label class="img-pick">選檔<input type="file" accept="image/*" multiple style="display:none" onchange="boxImgTarget=${i};addBoxImgFiles(${i}, this.files); this.value='';"></label>
+                </div>
+                <div class="box-imgs">${b.imgs.map((src, j) =>
+            `<div class="img-thumb"><img src="${src}"><button type="button" class="img-x" onclick="removeBoxImg(${i},${j})">✕</button></div>`).join('')}</div>
             </div>`).join('');
+        bindBoxDrops();
+    }
+    function bindBoxDrops() {
+        document.querySelectorAll('#boxesBox .box-drop').forEach(dz => {
+            const i = +dz.dataset.i;
+            dz.addEventListener('dragover', e => { e.preventDefault(); boxImgTarget = i; dz.classList.add('drag'); });
+            dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+            dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('drag'); addBoxImgFiles(i, e.dataTransfer.files); });
+        });
     }
     function syncBoxesFromDOM() {
         const box = document.getElementById('boxesBox');
         if (!box) return;
-        editBoxes = [...box.querySelectorAll('.box-b')].map(t => t.value);
+        [...box.querySelectorAll('.box-b')].forEach((t, i) => { if (editBoxes[i]) editBoxes[i].b = t.value; });
     }
-    function addBox() { syncBoxesFromDOM(); editBoxes.push(''); renderBoxesEditor(); }
-    function removeBox(i) { syncBoxesFromDOM(); editBoxes.splice(i, 1); renderBoxesEditor(); }
+    function addBoxImgFiles(i, files) {
+        syncBoxesFromDOM();
+        [...files].forEach(f => {
+            if (!f.type || !f.type.startsWith('image/')) return;
+            const r = new FileReader();
+            r.onload = e => { if (editBoxes[i]) { editBoxes[i].imgs.push(e.target.result); renderBoxesEditor(); } };
+            r.readAsDataURL(f);
+        });
+    }
+    function removeBoxImg(i, j) { syncBoxesFromDOM(); if (editBoxes[i]) editBoxes[i].imgs.splice(j, 1); renderBoxesEditor(); }
+    function addBox() { syncBoxesFromDOM(); editBoxes.push({ b: '', imgs: [] }); renderBoxesEditor(); }
+    function removeBox(i) { syncBoxesFromDOM(); editBoxes.splice(i, 1); if (!editBoxes.length) editBoxes.push({ b: '', imgs: [] }); renderBoxesEditor(); }
     function moveBox(i, dir) {
         syncBoxesFromDOM();
         const j = i + dir;
@@ -1060,7 +1119,7 @@
     function copyItem(id, idx) {
         const n = notes.find(n => n.id === id);
         if (!n || !n.items || !n.items[idx]) return;
-        const text = boxesOf(n.items[idx]).filter(b => (b || '').trim()).join('\n') || n.items[idx].t || '';
+        const text = boxesOf(n.items[idx]).map(b => b.b).filter(t => (t || '').trim()).join('\n') || n.items[idx].t || '';
         if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => setStatus('已複製 ✓')).catch(() => setStatus('複製失敗，請手動選取'));
     }
 
@@ -1089,70 +1148,67 @@
         const n = notes.find(n => n.id === id);
         if (!n || !n.items || !n.items[idx]) return;
         const it = n.items[idx];
-        editImgs = imgsOfItem(it).slice();
-        imgEditActive = true;
-        editBoxes = boxesOf(it).slice();
+        imgEditActive = false; boxEditMode = true; boxImgTarget = 0;
+        editBoxes = boxesOf(it).map(b => ({ b: b.b, imgs: b.imgs.slice() }));
         document.getElementById('contentArea').innerHTML = `
             <div class="editor">
                 <h2 style="margin-top:0">編輯這一則</h2>
                 <label>標題（可空）</label>
                 <input type="text" id="oneT" value="${esc(it.t || '')}">
-                <label>區塊（每個框框各自一段，可新增、↑↓、刪除）</label>
+                <label>區塊（每個框框各自有文字＋圖片，可新增、↑↓、刪除）</label>
                 <div id="boxesBox"></div>
                 <button type="button" class="btn ghost" style="margin-top:6px" onclick="addBox()">＋ 新增框框</button>
-                ${imgEditorHTML()}
                 <div class="row-actions">
                     <button class="btn primary" onclick="saveOneItem(${id},${idx})">保存</button>
                     <button class="btn ghost" onclick="viewNote(${id})">取消</button>
                 </div>
             </div>`;
-        renderBoxesEditor(); renderImgThumbs(); bindImgDrop();
+        renderBoxesEditor();
     }
     function saveOneItem(id, idx) {
         const n = notes.find(n => n.id === id);
         if (!n || !n.items || !n.items[idx]) return;
         syncBoxesFromDOM();
-        const boxes = editBoxes.filter(b => (b || '').trim() !== '');
-        n.items[idx] = { t: document.getElementById('oneT').value, boxes, imgs: editImgs.slice() };
-        imgEditActive = false;
+        const boxes = editBoxes.filter(b => (b.b || '').trim() || b.imgs.length).map(b => ({ b: b.b, imgs: b.imgs.slice() }));
+        n.items[idx] = { t: document.getElementById('oneT').value, boxes, imgs: [] };
+        boxEditMode = false;
         persist(); viewNote(id); setStatus('已更新');
     }
     function itemAddNew(id) {
         const n = notes.find(n => n.id === id);
         if (!n) return;
-        editImgs = []; imgEditActive = true;
-        editBoxes = [''];
+        imgEditActive = false; boxEditMode = true; boxImgTarget = 0;
+        editBoxes = [{ b: '', imgs: [] }];
         document.getElementById('contentArea').innerHTML = `
             <div class="editor">
                 <h2 style="margin-top:0">新增一則</h2>
                 <label>標題（可空）</label>
                 <input type="text" id="oneT" value="">
-                <label>區塊（可新增多個框框）</label>
+                <label>區塊（每個框框各自有文字＋圖片，可新增多個）</label>
                 <div id="boxesBox"></div>
                 <button type="button" class="btn ghost" style="margin-top:6px" onclick="addBox()">＋ 新增框框</button>
-                ${imgEditorHTML()}
                 <div class="row-actions">
                     <button class="btn primary" onclick="saveNewItem(${id})">建立</button>
                     <button class="btn ghost" onclick="viewNote(${id})">取消</button>
                 </div>
             </div>`;
-        renderBoxesEditor(); renderImgThumbs(); bindImgDrop();
+        renderBoxesEditor();
     }
     function saveNewItem(id) {
         const n = notes.find(n => n.id === id);
         if (!n) return;
         if (!Array.isArray(n.items)) n.items = [];
         syncBoxesFromDOM();
-        const boxes = editBoxes.filter(b => (b || '').trim() !== '');
+        const boxes = editBoxes.filter(b => (b.b || '').trim() || b.imgs.length).map(b => ({ b: b.b, imgs: b.imgs.slice() }));
         const t = document.getElementById('oneT').value;
-        if (!t.trim() && !boxes.length && !editImgs.length) { imgEditActive = false; viewNote(id); return; }
-        n.items.push({ t, boxes, imgs: editImgs.slice() });
-        imgEditActive = false;
+        if (!t.trim() && !boxes.length) { boxEditMode = false; viewNote(id); return; }
+        n.items.push({ t, boxes, imgs: [] });
+        boxEditMode = false;
         persist(); viewNote(id); setStatus('已新增一則');
     }
 
     function viewNote(id) {
-        currentId = id; imgEditActive = false;
+        currentId = id; imgEditActive = false; boxEditMode = false;
         const n = notes.find(n => n.id === id);
         if (!n) { showWelcome(); return; }
         const tag = n.category
@@ -1162,11 +1218,14 @@
         let body;
         if (items) {
             body = `<div class="qlist">` + items.map((it, idx) => {
-                const firstBox = (boxesOf(it).find(b => (b || '').trim()) || '');
+                const bxs = boxesOf(it);
+                const firstBox = (bxs.find(b => (b.b || '').trim()) || { b: '' }).b;
                 const label = (it.t || '').trim() || firstBox.split('\n')[0].slice(0, 40) || '（無標題）';
-                const boxesHTML = boxesOf(it).filter(b => (b || '').trim()).map(b =>
-                    `<div class="qbox"><div class="qbox-t">${renderBoxBody(b)}</div><button class="qbox-copy" onclick="copyText(this)" data-copy="${esc(b)}">複製</button></div>`).join('');
-                const imgsHTML = imgsOfItem(it).map(src => `<img src="${src}" class="qitem-img">`).join('');
+                const boxesHTML = bxs.filter(b => (b.b || '').trim() || b.imgs.length).map(b => {
+                    const imgs = b.imgs.map(src => `<img src="${src}" class="qbox-img">`).join('');
+                    const copyBtn = (b.b || '').trim() ? `<button class="qbox-copy" onclick="copyText(this)" data-copy="${esc(b.b)}">複製</button>` : '';
+                    return `<div class="qbox"><div class="qbox-t">${renderBoxBody(b.b)}${imgs}</div>${copyBtn}</div>`;
+                }).join('');
                 return `<div class="qitem">
                     <div class="qitem-head" onclick="toggleQ(this)">
                         <span class="qitem-chev">▸</span>
@@ -1179,7 +1238,7 @@
                             <button class="danger" onclick="event.stopPropagation();itemDelete(${id},${idx})">刪除</button>
                         </div>
                     </div>
-                    <div class="qitem-body"><div class="qboxes">${boxesHTML}</div>${imgsHTML}</div>
+                    <div class="qitem-body"><div class="qboxes">${boxesHTML}</div></div>
                 </div>`;
             }).join('') + `</div><button class="btn ghost" style="margin-top:12px" onclick="itemAddNew(${id})">＋ 新增一則</button>`;
         } else {
@@ -1244,7 +1303,7 @@
         editImgs = imgsOf(n).slice(); imgEditActive = true;
         const items = itemsOf(n);
         if (items) {
-            editItems = items.map(it => ({ t: it.t || '', boxes: boxesOf(it).slice(), imgs: imgsOfItem(it).slice() }));
+            editItems = items.map(it => ({ t: it.t || '', boxes: boxesOf(it).map(b => ({ b: b.b, imgs: b.imgs.slice() })), imgs: [] }));
             document.getElementById('contentArea').innerHTML = `
                 <div class="editor">
                     <label>頁面標題</label>
@@ -1287,8 +1346,8 @@
         const category = document.getElementById('editCat').value.trim();
         if (document.getElementById('itemsBox')) {
             const items = editItems
-                .map(it => ({ t: (it.t || ''), boxes: boxesOf(it).filter(b => (b || '').trim() !== ''), imgs: imgsOfItem(it) }))
-                .filter(it => it.t.trim() || it.boxes.length || it.imgs.length);
+                .map(it => ({ t: (it.t || ''), boxes: boxesOf(it).filter(b => (b.b || '').trim() || b.imgs.length).map(b => ({ b: b.b, imgs: b.imgs.slice() })), imgs: [] }))
+                .filter(it => it.t.trim() || it.boxes.length);
             notes = notes.map(n => n.id === currentId ? { ...n, title, category, items, content: '', imgs: editImgs.slice(), img: '' } : n);
             imgEditActive = false; persist(); render(); viewNote(currentId);
             return;
