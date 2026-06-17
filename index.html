@@ -110,6 +110,7 @@
         .qitem-menu button.danger { color: var(--danger); }
         .qitem-body { display: none; padding: 12px 14px 14px; white-space: pre-wrap; line-height: 1.7; color: var(--ink); border-top: 1px solid var(--border); }
         .qitem.open .qitem-body { display: block; }
+        .qitem-img { max-width: 100%; display: block; margin-top: 10px; border: 1px solid var(--border); }
         .item-card { position: relative; border: 1px solid var(--border); border-radius: 0; padding: 14px 86px 14px 16px; background: #F4FBF9; }
         .item-card.copyable { cursor: pointer; }
         .item-card.copyable:hover { border-color: var(--accent); background: #E7F6F1; }
@@ -1023,6 +1024,8 @@
         const n = notes.find(n => n.id === id);
         if (!n || !n.items || !n.items[idx]) return;
         const it = n.items[idx];
+        editImgs = Array.isArray(it.imgs) ? it.imgs.slice() : [];
+        imgEditActive = true;
         document.getElementById('contentArea').innerHTML = `
             <div class="editor">
                 <h2 style="margin-top:0">編輯這一則</h2>
@@ -1030,17 +1033,50 @@
                 <input type="text" id="oneT" value="${esc(it.t || '')}">
                 <label>內容</label>
                 <textarea id="oneB" rows="6">${esc(it.b || '')}</textarea>
+                ${imgEditorHTML()}
                 <div class="row-actions">
                     <button class="btn primary" onclick="saveOneItem(${id},${idx})">保存</button>
                     <button class="btn ghost" onclick="viewNote(${id})">取消</button>
                 </div>
             </div>`;
+        renderImgThumbs(); bindImgDrop();
     }
     function saveOneItem(id, idx) {
         const n = notes.find(n => n.id === id);
         if (!n || !n.items || !n.items[idx]) return;
-        n.items[idx] = { t: document.getElementById('oneT').value, b: document.getElementById('oneB').value };
+        n.items[idx] = { t: document.getElementById('oneT').value, b: document.getElementById('oneB').value, imgs: editImgs.slice() };
+        imgEditActive = false;
         persist(); viewNote(id); setStatus('已更新');
+    }
+    function itemAddNew(id) {
+        const n = notes.find(n => n.id === id);
+        if (!n) return;
+        editImgs = []; imgEditActive = true;
+        document.getElementById('contentArea').innerHTML = `
+            <div class="editor">
+                <h2 style="margin-top:0">新增一則</h2>
+                <label>標題（可空）</label>
+                <input type="text" id="oneT" value="">
+                <label>內容</label>
+                <textarea id="oneB" rows="6"></textarea>
+                ${imgEditorHTML()}
+                <div class="row-actions">
+                    <button class="btn primary" onclick="saveNewItem(${id})">建立</button>
+                    <button class="btn ghost" onclick="viewNote(${id})">取消</button>
+                </div>
+            </div>`;
+        renderImgThumbs(); bindImgDrop();
+    }
+    function saveNewItem(id) {
+        const n = notes.find(n => n.id === id);
+        if (!n) return;
+        if (!Array.isArray(n.items)) n.items = [];
+        const t = document.getElementById('oneT').value;
+        const b = document.getElementById('oneB').value;
+        if (!t.trim() && !b.trim() && !editImgs.length) { imgEditActive = false; viewNote(id); return; }
+        n.items.push({ t, b, imgs: editImgs.slice() });
+        imgEditActive = false;
+        persist(); viewNote(id); setStatus('已新增一則');
     }
 
     function viewNote(id) {
@@ -1067,9 +1103,9 @@
                             <button class="danger" onclick="event.stopPropagation();itemDelete(${id},${idx})">刪除</button>
                         </div>
                     </div>
-                    <div class="qitem-body">${esc(it.b || '')}</div>
+                    <div class="qitem-body">${esc(it.b || '')}${(Array.isArray(it.imgs) ? it.imgs : []).map(src => `<img src="${src}" class="qitem-img">`).join('')}</div>
                 </div>`;
-            }).join('') + `</div>`;
+            }).join('') + `</div><button class="btn ghost" style="margin-top:12px" onclick="itemAddNew(${id})">＋ 新增一則</button>`;
         } else {
             body = `<div style="line-height:1.85;white-space:pre-wrap;color:#214A43">${esc(n.content)}</div>`;
         }
