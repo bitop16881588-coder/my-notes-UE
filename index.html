@@ -36,14 +36,15 @@
         .note-item:hover { background: rgba(255,255,255,.06); }
         .note-item .pin { color: #F2C230; }
         /* 分类分组 */
-        .cat-group .cat-header { padding: 11px 14px; background: rgba(0,0,0,.14); color: var(--side-muted); font-size: 12px; font-weight: 700;
+        .cat-group .cat-header { padding: 12px 14px; background: rgba(0,0,0,.14); color: #FFFFFF; font-size: 13px; font-weight: 700;
             cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none;
             border-bottom: 1px solid var(--side-line); letter-spacing: .5px; }
-        .cat-group .cat-header:hover { color: var(--side-ink); }
+        .cat-group .cat-header:hover { color: #FFFFFF; }
         .cat-group .cat-header.pinned { color: #F2C230; }
-        .cat-group .cat-header.solo { font-weight: 500; color: var(--side-ink); background: transparent; }
-        .cat-group .cat-header.solo:hover { background: rgba(255,255,255,.06); color: var(--side-ink); }
+        .cat-group .cat-header.solo { font-weight: 700; color: #FFFFFF; background: transparent; font-size: 14px; }
+        .cat-group .cat-header.solo:hover { background: rgba(255,255,255,.08); color: #FFFFFF; }
         .cat-group .cat-header .left { display: flex; align-items: center; gap: 8px; }
+        .cat-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; box-shadow: 0 0 0 2px rgba(255,255,255,.15); }
         .cat-group .cat-header .chev { transition: .2s; font-size: 10px; display: inline-block; }
         .cat-group.collapsed .cat-body { display: none; }
         .cat-group.collapsed .chev { transform: rotate(-90deg); }
@@ -100,6 +101,13 @@
         .qitem.open .qitem-chev { transform: rotate(90deg); }
         .qitem-title { flex: 1; font-weight: 700; color: #0F2A24; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .qitem-head .item-copy { position: static; flex: none; }
+        .qitem-more { flex: none; background: transparent; border: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 0 6px; line-height: 1; }
+        .qitem-more:hover { color: var(--accent-d); }
+        .qitem-head { position: relative; }
+        .qitem-menu { position: absolute; top: calc(100% - 4px); right: 8px; background: var(--surface); border: 1px solid var(--border-strong); min-width: 130px; z-index: 60; box-shadow: 0 6px 18px rgba(0,0,0,.12); }
+        .qitem-menu button { display: block; width: 100%; text-align: left; padding: 10px 14px; border: none; background: transparent; cursor: pointer; font-family: inherit; font-size: 14px; color: var(--ink); }
+        .qitem-menu button:hover { background: var(--accent-soft); }
+        .qitem-menu button.danger { color: var(--danger); }
         .qitem-body { display: none; padding: 12px 14px 14px; white-space: pre-wrap; line-height: 1.7; color: var(--ink); border-top: 1px solid var(--border); }
         .qitem.open .qitem-body { display: block; }
         .item-card { position: relative; border: 1px solid var(--border); border-radius: 0; padding: 14px 86px 14px 16px; background: #F4FBF9; }
@@ -742,21 +750,29 @@
         </div>`;
     }
 
+    const CAT_COLORS = ['#1FBD9E', '#3B9BD6', '#E0A93B', '#E0664F', '#9B6AD8', '#E06699', '#6CB04E', '#E08A3B', '#4FB0C2', '#C2557E'];
+    function catColor(name) {
+        let h = 0; const s = name || '';
+        for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+        return CAT_COLORS[h % CAT_COLORS.length];
+    }
+
     function groupHTML(key, name, items, pinned) {
         const col = collapsed.has(key);
         const del = pinned ? '' : `<button class="cat-del" data-key="${esc(key)}" title="刪除此分類所有筆記">🗑</button>`;
+        const dot = pinned ? '' : `<span class="cat-dot" style="background:${catColor(name)}"></span>`;
         // 單頁分類：整類只有一頁、且標題＝分類名 → 直接點標題開啟，不再多列一條
         if (!pinned && items.length === 1 && items[0].title === name) {
             return `<div class="cat-group">
                 <div class="cat-header solo" data-open="${items[0].id}">
-                    <span class="left">${esc(name)}</span>
+                    <span class="left">${dot}${esc(name)}</span>
                     <span class="right">${del}</span>
                 </div>
             </div>`;
         }
         return `<div class="cat-group ${col ? 'collapsed' : ''}">
             <div class="cat-header ${pinned ? 'pinned' : ''}" data-key="${esc(key)}">
-                <span class="left"><span class="chev">▾</span>${esc(name)}</span>
+                <span class="left"><span class="chev">▾</span>${dot}${esc(name)}</span>
                 <span class="right">${del}<span class="cat-count">${items.length}</span></span>
             </div>
             <div class="cat-body">${items.map(noteItemHTML).join('')}</div>
@@ -982,6 +998,51 @@
         if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => setStatus('已複製 ✓')).catch(() => setStatus('複製失敗，請手動選取'));
     }
 
+    function toggleItemMenu(btn) {
+        const menu = btn.nextElementSibling;
+        if (!menu) return;
+        document.querySelectorAll('.qitem-menu').forEach(m => { if (m !== menu) m.hidden = true; });
+        menu.hidden = !menu.hidden;
+        if (!menu.hidden) setTimeout(() => document.addEventListener('click', () => { menu.hidden = true; }, { once: true }), 0);
+    }
+    function itemToTop(id, idx) {
+        const n = notes.find(n => n.id === id);
+        if (!n || !n.items) return;
+        const [it] = n.items.splice(idx, 1);
+        n.items.unshift(it);
+        persist(); viewNote(id); setStatus('已移到最上');
+    }
+    function itemDelete(id, idx) {
+        const n = notes.find(n => n.id === id);
+        if (!n || !n.items) return;
+        if (!confirm('確定刪除這一則？')) return;
+        n.items.splice(idx, 1);
+        persist(); viewNote(id); setStatus('已刪除一則，記得按同步');
+    }
+    function itemEditInline(id, idx) {
+        const n = notes.find(n => n.id === id);
+        if (!n || !n.items || !n.items[idx]) return;
+        const it = n.items[idx];
+        document.getElementById('contentArea').innerHTML = `
+            <div class="editor">
+                <h2 style="margin-top:0">編輯這一則</h2>
+                <label>標題（可空）</label>
+                <input type="text" id="oneT" value="${esc(it.t || '')}">
+                <label>內容</label>
+                <textarea id="oneB" rows="6">${esc(it.b || '')}</textarea>
+                <div class="row-actions">
+                    <button class="btn primary" onclick="saveOneItem(${id},${idx})">保存</button>
+                    <button class="btn ghost" onclick="viewNote(${id})">取消</button>
+                </div>
+            </div>`;
+    }
+    function saveOneItem(id, idx) {
+        const n = notes.find(n => n.id === id);
+        if (!n || !n.items || !n.items[idx]) return;
+        n.items[idx] = { t: document.getElementById('oneT').value, b: document.getElementById('oneB').value };
+        persist(); viewNote(id); setStatus('已更新');
+    }
+
     function viewNote(id) {
         currentId = id; imgEditActive = false;
         const n = notes.find(n => n.id === id);
@@ -999,6 +1060,12 @@
                         <span class="qitem-chev">▸</span>
                         <span class="qitem-title">${esc(label)}</span>
                         <button class="item-copy" onclick="event.stopPropagation();copyItem(${id},${idx})">複製</button>
+                        <button class="qitem-more" onclick="event.stopPropagation();toggleItemMenu(this)" title="這則的選項">⋯</button>
+                        <div class="qitem-menu" hidden>
+                            <button onclick="event.stopPropagation();itemToTop(${id},${idx})">移到最上</button>
+                            <button onclick="event.stopPropagation();itemEditInline(${id},${idx})">編輯</button>
+                            <button class="danger" onclick="event.stopPropagation();itemDelete(${id},${idx})">刪除</button>
+                        </div>
                     </div>
                     <div class="qitem-body">${esc(it.b || '')}</div>
                 </div>`;
