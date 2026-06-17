@@ -110,6 +110,11 @@
         .qitem-menu button.danger { color: var(--danger); }
         .qitem-body { display: none; padding: 12px 14px 14px; line-height: 1.7; color: var(--ink); border-top: 1px solid var(--border); }
         .qitem-text { white-space: pre-wrap; }
+        .qboxes { display: flex; flex-direction: column; gap: 8px; }
+        .qbox { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; border: 1px solid var(--border); background: #F4FBF9; padding: 9px 11px; }
+        .qbox-t { white-space: pre-wrap; flex: 1; color: var(--ink); }
+        .qbox-copy { flex: none; background: var(--accent-soft); color: var(--accent-d); border: none; padding: 4px 11px; font-size: 12px; cursor: pointer; }
+        .qbox-copy:hover { background: var(--accent); color: #fff; }
         .qtable { border-collapse: collapse; margin: 4px 0; width: 100%; }
         .qtable th, .qtable td { border: 1px solid var(--border-strong); padding: 6px 10px; text-align: left; font-size: 13px; vertical-align: top; }
         .qtable th { background: var(--accent-soft); font-weight: 700; color: #0F2A24; }
@@ -1000,8 +1005,9 @@
         const raw = text || '';
         const lines = raw.split('\n');
         const nonEmpty = lines.filter(l => l.trim() !== '');
+        if (!nonEmpty.length) return '';
         const tabbed = nonEmpty.filter(l => l.includes('\t'));
-        // 多數非空白行含 Tab → 視為貼上的表格，渲染成表格（欄位並排）
+        // 多數行含 Tab → 渲染成表格
         if (nonEmpty.length >= 2 && tabbed.length >= Math.ceil(nonEmpty.length * 0.6)) {
             let html = '<table class="qtable">';
             nonEmpty.forEach((l, i) => {
@@ -1011,7 +1017,15 @@
             });
             return html + '</table>';
         }
-        return `<span class="qitem-text">${esc(raw)}</span>`;
+        // 否則：每一行 → 一個小框框（各自可複製）
+        return '<div class="qboxes">' + nonEmpty.map(line =>
+            `<div class="qbox"><span class="qbox-t">${esc(line)}</span><button class="qbox-copy" onclick="copyText(this)">複製</button></div>`
+        ).join('') + '</div>';
+    }
+    function copyText(btn) {
+        const t = btn.parentElement.querySelector('.qbox-t');
+        if (!t) return;
+        if (navigator.clipboard) navigator.clipboard.writeText(t.textContent).then(() => setStatus('已複製 ✓')).catch(() => setStatus('複製失敗'));
     }
 
     function copyItem(id, idx) {
