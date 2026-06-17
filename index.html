@@ -108,7 +108,11 @@
         .qitem-menu button { display: block; width: 100%; text-align: left; padding: 10px 14px; border: none; background: transparent; cursor: pointer; font-family: inherit; font-size: 14px; color: var(--ink); }
         .qitem-menu button:hover { background: var(--accent-soft); }
         .qitem-menu button.danger { color: var(--danger); }
-        .qitem-body { display: none; padding: 12px 14px 14px; white-space: pre-wrap; line-height: 1.7; color: var(--ink); border-top: 1px solid var(--border); }
+        .qitem-body { display: none; padding: 12px 14px 14px; line-height: 1.7; color: var(--ink); border-top: 1px solid var(--border); }
+        .qitem-text { white-space: pre-wrap; }
+        .qtable { border-collapse: collapse; margin: 4px 0; width: 100%; }
+        .qtable th, .qtable td { border: 1px solid var(--border-strong); padding: 6px 10px; text-align: left; font-size: 13px; vertical-align: top; }
+        .qtable th { background: var(--accent-soft); font-weight: 700; color: #0F2A24; }
         .qitem.open .qitem-body { display: block; }
         .qitem-img { max-width: 100%; display: block; margin-top: 10px; border: 1px solid var(--border); }
         .item-card { position: relative; border: 1px solid var(--border); border-radius: 0; padding: 14px 86px 14px 16px; background: #F4FBF9; }
@@ -992,6 +996,24 @@
     }
     function closeOptMenuOnce() { const m = document.getElementById('optMenu'); if (m) m.hidden = true; }
 
+    function renderItemBody(text) {
+        const raw = text || '';
+        const lines = raw.split('\n');
+        const nonEmpty = lines.filter(l => l.trim() !== '');
+        const tabbed = nonEmpty.filter(l => l.includes('\t'));
+        // 多數非空白行含 Tab → 視為貼上的表格，渲染成表格（欄位並排）
+        if (nonEmpty.length >= 2 && tabbed.length >= Math.ceil(nonEmpty.length * 0.6)) {
+            let html = '<table class="qtable">';
+            nonEmpty.forEach((l, i) => {
+                const cells = l.split('\t');
+                const tg = i === 0 ? 'th' : 'td';
+                html += '<tr>' + cells.map(c => `<${tg}>${esc(c.trim())}</${tg}>`).join('') + '</tr>';
+            });
+            return html + '</table>';
+        }
+        return `<span class="qitem-text">${esc(raw)}</span>`;
+    }
+
     function copyItem(id, idx) {
         const n = notes.find(n => n.id === id);
         if (!n || !n.items || !n.items[idx]) return;
@@ -1103,7 +1125,7 @@
                             <button class="danger" onclick="event.stopPropagation();itemDelete(${id},${idx})">刪除</button>
                         </div>
                     </div>
-                    <div class="qitem-body">${esc(it.b || '')}${(Array.isArray(it.imgs) ? it.imgs : []).map(src => `<img src="${src}" class="qitem-img">`).join('')}</div>
+                    <div class="qitem-body">${renderItemBody(it.b)}${(Array.isArray(it.imgs) ? it.imgs : []).map(src => `<img src="${src}" class="qitem-img">`).join('')}</div>
                 </div>`;
             }).join('') + `</div><button class="btn ghost" style="margin-top:12px" onclick="itemAddNew(${id})">＋ 新增一則</button>`;
         } else {
