@@ -145,7 +145,9 @@
         .box-drop { margin-top: 6px; border: 2px dashed var(--border-strong); padding: 8px 10px; text-align: center; color: var(--muted); font-size: 12px; background: #fff; cursor: pointer; }
         .box-drop.drag { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-d); }
         .box-imgs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-        .qbox-img { max-width: 100%; display: block; margin-top: 8px; border: 1px solid var(--border); }
+        .qbox-imgs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+        .qbox-img { width: 130px; height: 130px; object-fit: cover; border: 1px solid var(--border); cursor: pointer; transition: .15s; }
+        .qbox-img.big { width: 100%; height: auto; object-fit: contain; }
         /* 搜寻结果 */
         .s-row { display: flex; align-items: center; gap: 14px; text-decoration: none; color: var(--ink);
             padding: 12px 14px; border: 1px solid var(--border); border-radius: 0; margin-bottom: 8px; transition: .15s; }
@@ -1222,7 +1224,7 @@
                 const firstBox = (bxs.find(b => (b.b || '').trim()) || { b: '' }).b;
                 const label = (it.t || '').trim() || firstBox.split('\n')[0].slice(0, 40) || '（無標題）';
                 const boxesHTML = bxs.filter(b => (b.b || '').trim() || b.imgs.length).map(b => {
-                    const imgs = b.imgs.map(src => `<img src="${src}" class="qbox-img">`).join('');
+                    const imgs = b.imgs.length ? '<div class="qbox-imgs">' + b.imgs.map(src => `<img src="${src}" class="qbox-img" onclick="this.classList.toggle('big')" title="點圖可放大／縮小">`).join('') + '</div>' : '';
                     const copyBtn = (b.b || '').trim() ? `<button class="qbox-copy" onclick="copyText(this)" data-copy="${esc(b.b)}">複製</button>` : '';
                     return `<div class="qbox"><div class="qbox-t">${renderBoxBody(b.b)}${imgs}</div>${copyBtn}</div>`;
                 }).join('');
