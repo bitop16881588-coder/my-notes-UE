@@ -955,40 +955,68 @@
 
     /* ===== 結構化條列項目（罐頭語等）===== */
     let editItems = [];
+    let editBoxes = [];
     function itemsOf(n) { return Array.isArray(n.items) ? n.items : null; }
+    function boxesOf(it) { return Array.isArray(it.boxes) ? it.boxes : (it.b ? [it.b] : ['']); }
+    function imgsOfItem(it) { return Array.isArray(it.imgs) ? it.imgs : []; }
 
+    /* 頁面層級：項目清單（改標題、排序、刪除；內容用各則 ⋯→編輯）*/
     function renderItemsEditor() {
         const box = document.getElementById('itemsBox');
         if (!box) return;
         box.innerHTML = editItems.map((it, i) => `
             <div class="item-edit">
                 <div class="item-edit-head">
-                    <input type="text" class="it-title" placeholder="標題（可空）" value="${esc(it.t || '')}">
+                    <input type="text" class="it-title" placeholder="標題（可空）" value="${esc(it.t || '')}" oninput="setItemTitle(${i}, this.value)">
                     <span class="item-moves">
                         <button type="button" onclick="moveItem(${i},-1)" title="上移">↑</button>
                         <button type="button" onclick="moveItem(${i},1)" title="下移">↓</button>
                         <button type="button" class="it-del" onclick="removeItem(${i})" title="刪除">✕</button>
                     </span>
                 </div>
-                <textarea class="it-body" rows="3" placeholder="內容">${esc(it.b || '')}</textarea>
+                <div class="item-edit-sub">${boxesOf(it).filter(b => (b || '').trim()).length} 個區塊・${imgsOfItem(it).length} 張圖（內容用各則的「⋯ → 編輯」調整）</div>
             </div>`).join('');
     }
-    function syncItemsFromDOM() {
-        const box = document.getElementById('itemsBox');
-        if (!box) return;
-        editItems = [...box.querySelectorAll('.item-edit')].map(r => ({
-            t: r.querySelector('.it-title').value,
-            b: r.querySelector('.it-body').value
-        }));
-    }
-    function addItem() { syncItemsFromDOM(); editItems.push({ t: '', b: '' }); renderItemsEditor(); }
-    function removeItem(i) { syncItemsFromDOM(); editItems.splice(i, 1); renderItemsEditor(); }
+    function setItemTitle(i, v) { if (editItems[i]) editItems[i].t = v; }
+    function addItem() { editItems.push({ t: '', boxes: [''], imgs: [] }); renderItemsEditor(); }
+    function removeItem(i) { editItems.splice(i, 1); renderItemsEditor(); }
     function moveItem(i, dir) {
-        syncItemsFromDOM();
         const j = i + dir;
         if (j < 0 || j >= editItems.length) return;
         const tmp = editItems[i]; editItems[i] = editItems[j]; editItems[j] = tmp;
         renderItemsEditor();
+    }
+
+    /* 單則內的「區塊」編輯（可新增、↑↓、刪除）*/
+    function renderBoxesEditor() {
+        const box = document.getElementById('boxesBox');
+        if (!box) return;
+        box.innerHTML = editBoxes.map((b, i) => `
+            <div class="box-edit">
+                <div class="box-edit-head">
+                    <span class="box-no">區塊 ${i + 1}</span>
+                    <span class="item-moves">
+                        <button type="button" onclick="moveBox(${i},-1)" title="上移">↑</button>
+                        <button type="button" onclick="moveBox(${i},1)" title="下移">↓</button>
+                        <button type="button" class="it-del" onclick="removeBox(${i})" title="刪除">✕</button>
+                    </span>
+                </div>
+                <textarea class="box-b" rows="3" placeholder="這一區塊的內容…（可從試算表貼上表格）">${esc(b)}</textarea>
+            </div>`).join('');
+    }
+    function syncBoxesFromDOM() {
+        const box = document.getElementById('boxesBox');
+        if (!box) return;
+        editBoxes = [...box.querySelectorAll('.box-b')].map(t => t.value);
+    }
+    function addBox() { syncBoxesFromDOM(); editBoxes.push(''); renderBoxesEditor(); }
+    function removeBox(i) { syncBoxesFromDOM(); editBoxes.splice(i, 1); renderBoxesEditor(); }
+    function moveBox(i, dir) {
+        syncBoxesFromDOM();
+        const j = i + dir;
+        if (j < 0 || j >= editBoxes.length) return;
+        const tmp = editBoxes[i]; editBoxes[i] = editBoxes[j]; editBoxes[j] = tmp;
+        renderBoxesEditor();
     }
     function toggleQ(head) { head.parentElement.classList.toggle('open'); }
 
