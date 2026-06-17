@@ -112,7 +112,7 @@
         .qitem-text { white-space: pre-wrap; }
         .qboxes { display: flex; flex-direction: column; gap: 8px; }
         .qbox { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; border: 1px solid var(--border); background: #F4FBF9; padding: 9px 11px; }
-        .qbox-t { white-space: pre-wrap; flex: 1; color: var(--ink); }
+        .qbox-t { flex: 1; color: var(--ink); min-width: 0; overflow-x: auto; }
         .qbox-copy { flex: none; background: var(--accent-soft); color: var(--accent-d); border: none; padding: 4px 11px; font-size: 12px; cursor: pointer; }
         .qbox-copy:hover { background: var(--accent); color: #fff; }
         .qtable { border-collapse: collapse; margin: 4px 0; width: 100%; }
@@ -137,6 +137,11 @@
         .item-moves button:hover { border-color: var(--accent); color: var(--accent-d); }
         .item-moves .it-del:hover { border-color: var(--danger); color: var(--danger); }
         .item-edit .it-body { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 0; font-family: inherit; font-size: 13px; line-height: 1.6; resize: vertical; color: var(--ink); background: #fff; }
+        .item-edit-sub { font-size: 12px; color: var(--muted); padding-left: 2px; }
+        .box-edit { border: 1px solid var(--border-strong); padding: 8px 10px; margin-bottom: 8px; background: #F4FBF9; }
+        .box-edit-head { display: flex; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+        .box-no { font-size: 12px; color: var(--accent-d); font-weight: 700; }
+        .box-edit .box-b { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 0; font-family: inherit; font-size: 13px; line-height: 1.6; resize: vertical; color: var(--ink); background: #fff; }
         /* 搜寻结果 */
         .s-row { display: flex; align-items: center; gap: 14px; text-decoration: none; color: var(--ink);
             padding: 12px 14px; border: 1px solid var(--border); border-radius: 0; margin-bottom: 8px; transition: .15s; }
@@ -1029,7 +1034,7 @@
     }
     function closeOptMenuOnce() { const m = document.getElementById('optMenu'); if (m) m.hidden = true; }
 
-    function renderItemBody(text) {
+    function renderBoxBody(text) {
         const raw = text || '';
         const lines = raw.split('\n');
         const nonEmpty = lines.filter(l => l.trim() !== '');
@@ -1045,21 +1050,17 @@
             });
             return html + '</table>';
         }
-        // 否則：每一行 → 一個小框框（各自可複製）
-        return '<div class="qboxes">' + nonEmpty.map(line =>
-            `<div class="qbox"><span class="qbox-t">${esc(line)}</span><button class="qbox-copy" onclick="copyText(this)">複製</button></div>`
-        ).join('') + '</div>';
+        return `<span class="qitem-text">${esc(raw)}</span>`;
     }
     function copyText(btn) {
-        const t = btn.parentElement.querySelector('.qbox-t');
-        if (!t) return;
-        if (navigator.clipboard) navigator.clipboard.writeText(t.textContent).then(() => setStatus('已複製 ✓')).catch(() => setStatus('複製失敗'));
+        const text = btn.dataset.copy || '';
+        if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => setStatus('已複製 ✓')).catch(() => setStatus('複製失敗'));
     }
 
     function copyItem(id, idx) {
         const n = notes.find(n => n.id === id);
         if (!n || !n.items || !n.items[idx]) return;
-        const text = n.items[idx].b || n.items[idx].t || '';
+        const text = boxesOf(n.items[idx]).filter(b => (b || '').trim()).join('\n') || n.items[idx].t || '';
         if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => setStatus('已複製 ✓')).catch(() => setStatus('複製失敗，請手動選取'));
     }
 
@@ -1088,27 +1089,31 @@
         const n = notes.find(n => n.id === id);
         if (!n || !n.items || !n.items[idx]) return;
         const it = n.items[idx];
-        editImgs = Array.isArray(it.imgs) ? it.imgs.slice() : [];
+        editImgs = imgsOfItem(it).slice();
         imgEditActive = true;
+        editBoxes = boxesOf(it).slice();
         document.getElementById('contentArea').innerHTML = `
             <div class="editor">
                 <h2 style="margin-top:0">編輯這一則</h2>
                 <label>標題（可空）</label>
                 <input type="text" id="oneT" value="${esc(it.t || '')}">
-                <label>內容</label>
-                <textarea id="oneB" rows="6">${esc(it.b || '')}</textarea>
+                <label>區塊（每個框框各自一段，可新增、↑↓、刪除）</label>
+                <div id="boxesBox"></div>
+                <button type="button" class="btn ghost" style="margin-top:6px" onclick="addBox()">＋ 新增框框</button>
                 ${imgEditorHTML()}
                 <div class="row-actions">
                     <button class="btn primary" onclick="saveOneItem(${id},${idx})">保存</button>
                     <button class="btn ghost" onclick="viewNote(${id})">取消</button>
                 </div>
             </div>`;
-        renderImgThumbs(); bindImgDrop();
+        renderBoxesEditor(); renderImgThumbs(); bindImgDrop();
     }
     function saveOneItem(id, idx) {
         const n = notes.find(n => n.id === id);
         if (!n || !n.items || !n.items[idx]) return;
-        n.items[idx] = { t: document.getElementById('oneT').value, b: document.getElementById('oneB').value, imgs: editImgs.slice() };
+        syncBoxesFromDOM();
+        const boxes = editBoxes.filter(b => (b || '').trim() !== '');
+        n.items[idx] = { t: document.getElementById('oneT').value, boxes, imgs: editImgs.slice() };
         imgEditActive = false;
         persist(); viewNote(id); setStatus('已更新');
     }
@@ -1116,29 +1121,32 @@
         const n = notes.find(n => n.id === id);
         if (!n) return;
         editImgs = []; imgEditActive = true;
+        editBoxes = [''];
         document.getElementById('contentArea').innerHTML = `
             <div class="editor">
                 <h2 style="margin-top:0">新增一則</h2>
                 <label>標題（可空）</label>
                 <input type="text" id="oneT" value="">
-                <label>內容</label>
-                <textarea id="oneB" rows="6"></textarea>
+                <label>區塊（可新增多個框框）</label>
+                <div id="boxesBox"></div>
+                <button type="button" class="btn ghost" style="margin-top:6px" onclick="addBox()">＋ 新增框框</button>
                 ${imgEditorHTML()}
                 <div class="row-actions">
                     <button class="btn primary" onclick="saveNewItem(${id})">建立</button>
                     <button class="btn ghost" onclick="viewNote(${id})">取消</button>
                 </div>
             </div>`;
-        renderImgThumbs(); bindImgDrop();
+        renderBoxesEditor(); renderImgThumbs(); bindImgDrop();
     }
     function saveNewItem(id) {
         const n = notes.find(n => n.id === id);
         if (!n) return;
         if (!Array.isArray(n.items)) n.items = [];
+        syncBoxesFromDOM();
+        const boxes = editBoxes.filter(b => (b || '').trim() !== '');
         const t = document.getElementById('oneT').value;
-        const b = document.getElementById('oneB').value;
-        if (!t.trim() && !b.trim() && !editImgs.length) { imgEditActive = false; viewNote(id); return; }
-        n.items.push({ t, b, imgs: editImgs.slice() });
+        if (!t.trim() && !boxes.length && !editImgs.length) { imgEditActive = false; viewNote(id); return; }
+        n.items.push({ t, boxes, imgs: editImgs.slice() });
         imgEditActive = false;
         persist(); viewNote(id); setStatus('已新增一則');
     }
@@ -1154,7 +1162,11 @@
         let body;
         if (items) {
             body = `<div class="qlist">` + items.map((it, idx) => {
-                const label = (it.t || '').trim() || ((it.b || '').split('\n')[0].slice(0, 40)) || '（無標題）';
+                const firstBox = (boxesOf(it).find(b => (b || '').trim()) || '');
+                const label = (it.t || '').trim() || firstBox.split('\n')[0].slice(0, 40) || '（無標題）';
+                const boxesHTML = boxesOf(it).filter(b => (b || '').trim()).map(b =>
+                    `<div class="qbox"><div class="qbox-t">${renderBoxBody(b)}</div><button class="qbox-copy" onclick="copyText(this)" data-copy="${esc(b)}">複製</button></div>`).join('');
+                const imgsHTML = imgsOfItem(it).map(src => `<img src="${src}" class="qitem-img">`).join('');
                 return `<div class="qitem">
                     <div class="qitem-head" onclick="toggleQ(this)">
                         <span class="qitem-chev">▸</span>
@@ -1167,7 +1179,7 @@
                             <button class="danger" onclick="event.stopPropagation();itemDelete(${id},${idx})">刪除</button>
                         </div>
                     </div>
-                    <div class="qitem-body">${renderItemBody(it.b)}${(Array.isArray(it.imgs) ? it.imgs : []).map(src => `<img src="${src}" class="qitem-img">`).join('')}</div>
+                    <div class="qitem-body"><div class="qboxes">${boxesHTML}</div>${imgsHTML}</div>
                 </div>`;
             }).join('') + `</div><button class="btn ghost" style="margin-top:12px" onclick="itemAddNew(${id})">＋ 新增一則</button>`;
         } else {
@@ -1232,7 +1244,7 @@
         editImgs = imgsOf(n).slice(); imgEditActive = true;
         const items = itemsOf(n);
         if (items) {
-            editItems = items.map(it => ({ t: it.t || '', b: it.b || '' }));
+            editItems = items.map(it => ({ t: it.t || '', boxes: boxesOf(it).slice(), imgs: imgsOfItem(it).slice() }));
             document.getElementById('contentArea').innerHTML = `
                 <div class="editor">
                     <label>頁面標題</label>
@@ -1274,8 +1286,9 @@
         const title = document.getElementById('editTitle').value.trim() || '(無標題)';
         const category = document.getElementById('editCat').value.trim();
         if (document.getElementById('itemsBox')) {
-            syncItemsFromDOM();
-            const items = editItems.filter(it => (it.t || '').trim() || (it.b || '').trim());
+            const items = editItems
+                .map(it => ({ t: (it.t || ''), boxes: boxesOf(it).filter(b => (b || '').trim() !== ''), imgs: imgsOfItem(it) }))
+                .filter(it => it.t.trim() || it.boxes.length || it.imgs.length);
             notes = notes.map(n => n.id === currentId ? { ...n, title, category, items, content: '', imgs: editImgs.slice(), img: '' } : n);
             imgEditActive = false; persist(); render(); viewNote(currentId);
             return;
