@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UE 高效知识库</title>
+    <title>UE 操作手冊</title>
     <style>
         :root {
-            --bg:#FCF1F4; --surface:#FFFFFF; --border:#D9EDE7; --border-strong:#C2E0D7;
-            --ink:#214A43; --muted:#6E8B85; --faint:#9CBFB7;
-            --accent:#1FBD9E; --accent-d:#168A75; --accent-soft:#DAF5EE;
-            --side:#1C8D7B; --side-2:#157566; --side-line:#2FA48F; --side-ink:#EAF8F4; --side-muted:#A6D6CC;
-            --danger:#E0664F;
+            --bg:#EFF4EA; --surface:#F8FBF4; --border:#CFDDC5; --border-strong:#BACBAE;
+            --ink:#18241A; --muted:#637359; --faint:#94A88B;
+            --accent:#7BA98D; --accent-d:#608E73; --accent-soft:#E2EDDC;
+            --side:#5E7B63; --side-2:#516B55; --side-line:#6E8D72; --side-ink:#F0F5EC; --side-muted:#C7D5C1;
+            --danger:#C0705B;
         }
         * { box-sizing: border-box; }
         body { font-family: 'Microsoft JhengHei', 'Noto Sans TC', sans-serif; display: flex; height: 100vh; margin: 0; background: var(--bg); color: var(--ink); }
@@ -69,7 +69,7 @@
         #searchBar input, #filterBar input { flex: 1; border: 0; outline: none; font-size: 15px; font-family: inherit; color: var(--ink); padding: 9px 0; background: transparent; }
         #searchBar input::placeholder, #filterBar input::placeholder { color: var(--faint); }
         .card { background: var(--surface); padding: 38px 40px; border-radius: 0; border: 1px solid var(--border); box-shadow: 0 6px 24px rgba(67,52,43,.06); }
-        .card h2 { color: #0F2A24; }
+        .card h2 { color: #18241A; }
         /* 按鈕系統 */
         .btn { padding: 9px 16px; border: none; border-radius: 0; cursor: pointer; font-size: 13px; font-family: inherit; transition: .15s; background: var(--accent-soft); color: var(--ink); }
         .btn:hover { filter: brightness(.97); }
@@ -100,12 +100,12 @@
         .items-view { display: flex; flex-direction: column; gap: 12px; margin-top: 4px; }
         /* 可收合的罐頭語項目（預設收合，點標題展開）*/
         .qlist { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
-        .qitem { border: 1px solid var(--border); border-radius: 0; background: #F4FBF9; overflow: hidden; }
+        .qitem { border: 1px solid var(--border); border-radius: 0; background: #ECF2E6; overflow: hidden; }
         .qitem-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; cursor: pointer; user-select: none; }
-        .qitem-head:hover { background: #E7F6F1; }
+        .qitem-head:hover { background: #E3EEDB; }
         .qitem-chev { color: var(--muted); font-size: 12px; transition: .2s; flex: none; }
         .qitem.open .qitem-chev { transform: rotate(90deg); }
-        .qitem-title { flex: 1; font-weight: 700; color: #0F2A24; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .qitem-title { flex: 1; font-weight: 700; color: #18241A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .qdrag { cursor: grab; color: var(--faint); padding: 0 4px; font-size: 15px; flex: none; user-select: none; }
         .qdrag:active { cursor: grabbing; }
         .qitem.dragover { box-shadow: inset 0 3px 0 var(--accent); }
@@ -117,28 +117,28 @@
         .qitem-menu button { display: block; width: 100%; text-align: left; padding: 10px 14px; border: none; background: transparent; cursor: pointer; font-family: inherit; font-size: 14px; color: var(--ink); }
         .qitem-menu button:hover { background: var(--accent-soft); }
         .qitem-menu button.danger { color: var(--danger); }
-        .qitem-body { display: none; padding: 12px 14px 14px; line-height: 1.7; color: #11302A; border-top: 1px solid var(--border); }
+        .qitem-body { display: none; padding: 12px 14px 14px; line-height: 1.7; color: #18241A; border-top: 1px solid var(--border); }
         .qitem-text { white-space: pre-wrap; }
         .qboxes { display: flex; flex-direction: column; gap: 8px; }
-        .qbox { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; border: 1px solid var(--border); background: #F4FBF9; padding: 9px 11px; }
-        .qbox-t { flex: 1; color: #11302A; font-weight: 500; min-width: 0; overflow-x: auto; }
+        .qbox { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; border: 1px solid var(--border); background: #ECF2E6; padding: 9px 11px; }
+        .qbox-t { flex: 1; color: #18241A; font-weight: 500; min-width: 0; overflow-x: auto; }
         .qbox-copy { flex: none; background: var(--accent-soft); color: var(--accent-d); border: none; padding: 4px 11px; font-size: 12px; cursor: pointer; }
         .qbox-copy:hover { background: var(--accent); color: #fff; }
         .qtable { border-collapse: collapse; margin: 4px 0; width: 100%; }
-        .qtable th, .qtable td { border: 1px solid var(--border-strong); padding: 6px 10px; text-align: left; font-size: 13px; vertical-align: top; color: #11302A; }
-        .qtable th { background: var(--accent-soft); font-weight: 700; color: #0F2A24; }
+        .qtable th, .qtable td { border: 1px solid var(--border-strong); padding: 6px 10px; text-align: left; font-size: 13px; vertical-align: top; color: #18241A; }
+        .qtable th { background: var(--accent-soft); font-weight: 700; color: #18241A; }
         .qitem.open .qitem-body { display: block; }
         .qitem-img { max-width: 100%; display: block; margin-top: 10px; border: 1px solid var(--border); }
-        .item-card { position: relative; border: 1px solid var(--border); border-radius: 0; padding: 14px 86px 14px 16px; background: #F4FBF9; }
+        .item-card { position: relative; border: 1px solid var(--border); border-radius: 0; padding: 14px 86px 14px 16px; background: #ECF2E6; }
         .item-card.copyable { cursor: pointer; }
-        .item-card.copyable:hover { border-color: var(--accent); background: #E7F6F1; }
+        .item-card.copyable:hover { border-color: var(--accent); background: #E3EEDB; }
         .item-cat { font-size: 11px; color: var(--accent-d); background: var(--accent-soft); display: inline-block; padding: 1px 8px; border-radius: 0; margin-bottom: 6px; }
-        .item-t { font-weight: 700; color: #0F2A24; margin-bottom: 6px; }
+        .item-t { font-weight: 700; color: #18241A; margin-bottom: 6px; }
         .item-b { white-space: pre-wrap; line-height: 1.7; color: var(--ink); }
         .item-copy { position: absolute; top: 12px; right: 12px; background: var(--accent-soft); color: var(--accent-d); border: none; border-radius: 0; padding: 6px 12px; font-size: 12px; cursor: pointer; }
         .item-copy:hover { background: var(--accent); color: #fff; }
         /* 條列項目（編輯）*/
-        .item-edit { border: 1px solid var(--border-strong); border-radius: 0; padding: 10px 12px; margin-bottom: 10px; background: #F4FBF9; }
+        .item-edit { border: 1px solid var(--border-strong); border-radius: 0; padding: 10px 12px; margin-bottom: 10px; background: #ECF2E6; }
         .item-edit-head { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
         .item-edit .it-title { flex: 1; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 0; font-family: inherit; font-size: 13px; color: var(--ink); background: #fff; }
         .item-moves { display: flex; gap: 4px; }
@@ -147,7 +147,7 @@
         .item-moves .it-del:hover { border-color: var(--danger); color: var(--danger); }
         .item-edit .it-body { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 0; font-family: inherit; font-size: 13px; line-height: 1.6; resize: vertical; color: var(--ink); background: #fff; }
         .item-edit-sub { font-size: 12px; color: var(--muted); padding-left: 2px; }
-        .box-edit { border: 1px solid var(--border-strong); padding: 8px 10px; margin-bottom: 8px; background: #F4FBF9; }
+        .box-edit { border: 1px solid var(--border-strong); padding: 8px 10px; margin-bottom: 8px; background: #ECF2E6; }
         .box-edit-head { display: flex; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 6px; }
         .box-no { font-size: 12px; color: var(--accent-d); font-weight: 700; }
         .box-edit .box-b { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 0; font-family: inherit; font-size: 13px; line-height: 1.6; resize: vertical; color: var(--ink); background: #fff; }
@@ -156,7 +156,7 @@
         .tbl-wrap { overflow-x: auto; margin-top: 6px; }
         .tbl-edit { border-collapse: collapse; }
         .tbl-edit td { border: 1px solid var(--border-strong); padding: 0; }
-        .tbl-edit .cell { border: none; padding: 6px 8px; font-family: inherit; font-size: 13px; min-width: 90px; width: 100%; box-sizing: border-box; background: #fff; color: #11302A; }
+        .tbl-edit .cell { border: none; padding: 6px 8px; font-family: inherit; font-size: 13px; min-width: 90px; width: 100%; box-sizing: border-box; background: #fff; color: #18241A; }
         .tbl-edit .cell.head { font-weight: 700; background: var(--accent-soft); }
         .tbl-edit .cell:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
         .tbl-edit .tbl-ctl { border: none; }
@@ -196,7 +196,7 @@
         .s-row .open-link { flex: none; text-decoration: none; color: var(--faint); font-size: 18px; padding: 0 4px; }
         .s-row .open-link:hover { color: var(--accent); }
         /* 多圖編輯器 */
-        .img-drop { border: 2px dashed var(--border-strong); border-radius: 0; padding: 18px; text-align: center; color: var(--muted); font-size: 13px; background: #F4FBF9; }
+        .img-drop { border: 2px dashed var(--border-strong); border-radius: 0; padding: 18px; text-align: center; color: var(--muted); font-size: 13px; background: #ECF2E6; }
         .img-drop.drag { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-d); }
         .img-pick { color: var(--accent-d); cursor: pointer; text-decoration: underline; }
         .img-thumbs { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
@@ -219,7 +219,7 @@
 
 <div id="lockScreen">
     <div class="lock-box">
-        <div class="lock-title">🔒 UE 知識庫</div>
+        <div class="lock-title">🔒 UE 操作手冊</div>
         <input id="lockInput" type="password" placeholder="請輸入密碼" autocomplete="current-password">
         <button onclick="unlockApp()">進入</button>
         <div id="lockMsg"></div>
@@ -228,9 +228,7 @@
 
 <div id="sidebar">
     <div class="side-head">
-        <div class="brand">UE 知識庫</div>
-        <button class="s-btn primary" onclick="newNote()">＋ 新增筆記</button>
-        <button class="s-btn" style="margin-top:6px;width:100%" onclick="newCategory()">＋ 新增分類 / 追加頁</button>
+        <div class="brand">UE 操作手冊</div>
     </div>
     <div id="listCtrl"><button id="collapseToggle" onclick="toggleAllCats()">收合全部</button></div>
     <div id="noteList"></div>
@@ -245,7 +243,9 @@
             <button class="s-btn" onclick="cleanupImages()" title="刪除沒有被任何筆記使用的圖檔">清理圖檔</button>
             <button class="s-btn" onclick="clearAllNotes()" title="清空全部">清空</button>
         </div>
-        <div id="syncStatus">尚未登入 Google</div>
+        <button class="s-btn primary" style="width:100%;margin-top:8px" onclick="newNote()">＋ 新增筆記</button>
+        <button class="s-btn" style="width:100%;margin-top:6px" onclick="newCategory()">＋ 新增分類 / 追加頁</button>
+        <div id="syncStatus" style="margin-top:8px">尚未登入 Google</div>
     </div>
 </div>
 
@@ -601,7 +601,7 @@
     function sheetsApiHelp() {
         return `<h2>需要先開啟「Google Sheets API」</h2>
             <p style="line-height:1.8;color:#566573">要照「分頁」分類，程式必須讀取試算表的<b>每一個分頁</b>，這需要在你的 Google Cloud 專案開啟一次 <b>Google Sheets API</b>（免費，只做一次）。步驟：</p>
-            <ol style="line-height:2;color:#214A43">
+            <ol style="line-height:2;color:#18241A">
                 <li>開啟 <a href="https://console.cloud.google.com/apis/library/sheets.googleapis.com" target="_blank" rel="noopener">Google Sheets API 啟用頁</a></li>
                 <li>確認左上角的「專案」是這個 App 在用的同一個專案</li>
                 <li>按藍色的「啟用 / Enable」</li>
@@ -610,20 +610,20 @@
     }
 
     function renderSheetMapping2(sheets, name) {
-        const selStyle = 'width:100%;padding:10px;border:1px solid #DCC8E6;border-radius:0;font-family:inherit;font-size:14px;color:#214A43';
-        const list = sheets.map(s => `<li>${esc(s.title)}　<span style="color:#9A86A8">（${s.rows.length} 列）</span></li>`).join('');
+        const selStyle = 'width:100%;padding:10px;border:1px solid #DCC8E6;border-radius:0;font-family:inherit;font-size:14px;color:#18241A';
+        const list = sheets.map(s => `<li>${esc(s.title)}　<span style="color:#7C8A72">（${s.rows.length} 列）</span></li>`).join('');
         document.getElementById('contentArea').innerHTML = `
             <div class="editor">
                 <h2 style="margin-top:0">匯入試算表：${esc(name)}</h2>
-                <p style="color:#9A86A8;font-size:13px">找到 <b>${sheets.length}</b> 個分頁：</p>
-                <ul style="line-height:1.9;color:#214A43;margin:6px 0 14px;padding-left:22px">${list}</ul>
+                <p style="color:#7C8A72;font-size:13px">找到 <b>${sheets.length}</b> 個分頁：</p>
+                <ul style="line-height:1.9;color:#18241A;margin:6px 0 14px;padding-left:22px">${list}</ul>
                 <label>匯入方式</label>
                 <select id="sheetCellMode" style="${selStyle}">
                     <option value="merge" selected>整個分頁＝一頁筆記（分頁名稱當標題，內容全放同一頁）</option>
                     <option value="row">每一列＝一則（分頁名稱當分類）</option>
                     <option value="cell">每個儲存格＝一則（分頁名稱當分類）</option>
                 </select>
-                <label style="display:flex;align-items:center;gap:8px;margin-top:16px;cursor:pointer;color:#9A86A8">
+                <label style="display:flex;align-items:center;gap:8px;margin-top:16px;cursor:pointer;color:#7C8A72">
                     <input type="checkbox" id="sheetSkipHeader"> 略過每個分頁的第一列（如果第一列是欄位標題）
                 </label>
                 <div class="row-actions">
@@ -689,13 +689,13 @@
         const catOpt = () => { let s = '<option value="-1" selected>（不指定，全部歸到「匯入」）</option>'; for (let k = 0; k < cols; k++) s += `<option value="${k}">${colLabel(k)}</option>`; return s; };
         const prev = rows.slice(0, 4).map(r => '<tr>' + Array.from({ length: cols }, (_, k) =>
             '<td style="border:1px solid #DCC8E6;padding:5px 8px;font-size:12px;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(String(r[k] ?? '')) + '</td>').join('') + '</tr>').join('');
-        const selStyle = 'width:100%;padding:10px;border:1px solid #DCC8E6;border-radius:0;font-family:inherit;font-size:14px;color:#214A43';
+        const selStyle = 'width:100%;padding:10px;border:1px solid #DCC8E6;border-radius:0;font-family:inherit;font-size:14px;color:#18241A';
         document.getElementById('contentArea').innerHTML = `
             <div class="editor">
                 <h2 style="margin-top:0">匯入試算表：${esc(name)}</h2>
                 <p style="color:#7f8c8d;font-size:13px">共 ${rows.length} 列、${cols} 欄。</p>
                 <div style="overflow-x:auto;margin:8px 0 2px"><table style="border-collapse:collapse">${prev}</table></div>
-                <p style="color:#9A86A8;font-size:12px;margin:0 0 4px">↑ 預覽前幾列</p>
+                <p style="color:#7C8A72;font-size:12px;margin:0 0 4px">↑ 預覽前幾列</p>
                 <label>匯入方式</label>
                 <select id="importMode" style="${selStyle}" onchange="toggleImportMode()">
                     <option value="cell" selected>每格＝一則（最上面那列當分類名稱）｜適合罐頭語</option>
@@ -1036,8 +1036,8 @@
 
     /* ============ 查看 / 编辑 / 新增 ============ */
     function welcomeHTML() {
-        return `<h2 style="margin-top:0">UE 知識庫</h2>
-            <p style="line-height:1.9;color:#9A86A8">
+        return `<h2 style="margin-top:0">UE 操作手冊</h2>
+            <p style="line-height:1.9;color:#7C8A72">
             ・ 上方<b>篩選框</b>打字 → 立刻列出符合的罐頭語，點卡片即可<b>複製</b>。<br>
             ・ 左側點<b>分類</b>可看整頁內容。<br>
             ・ 第一次用、或要更新資料：右上「<b>☁ 雲端</b>」搜尋並匯入你的試算表，再按底部「<b>同步</b>」存回雲端。</p>`;
@@ -1067,7 +1067,7 @@
         });
         window._filterHits = hits;
         if (!hits.length) { area.innerHTML = `<div class="s-empty">找不到含「${esc(raw)}」的內容</div>`; return; }
-        area.innerHTML = `<p style="color:#9A86A8;font-size:13px;margin:0 0 14px">符合「${esc(raw)}」的 ${hits.length} 則 — 點卡片即可複製</p>
+        area.innerHTML = `<p style="color:#7C8A72;font-size:13px;margin:0 0 14px">符合「${esc(raw)}」的 ${hits.length} 則 — 點卡片即可複製</p>
             <div class="items-view">` +
             hits.map((h, i) => `
                 <div class="item-card copyable" onclick="copyHit(${i})">
@@ -1094,7 +1094,7 @@
                 <input id="q" type="text" placeholder="搜尋 Google Drive 的試算表或文件，按 Enter" autocomplete="off" onkeydown="if(event.key==='Enter')searchDrive()">
                 <button class="btn primary" onclick="searchDrive()">搜尋</button>
             </div>
-            <p style="color:#9A86A8;font-size:13px;line-height:1.7">找到檔案後按「📥 匯入成筆記」即可加進來。試算表會依分頁變成一頁一頁的條列卡片。</p>`;
+            <p style="color:#7C8A72;font-size:13px;line-height:1.7">找到檔案後按「📥 匯入成筆記」即可加進來。試算表會依分頁變成一頁一頁的條列卡片。</p>`;
         const i = document.getElementById('q'); if (i) i.focus();
     }
 
@@ -1684,7 +1684,7 @@
         if (!n) { showWelcome(); return; }
         const tag = n.category
             ? `<span class="cat-tag">🗂️ ${esc(n.category)}</span>`
-            : `<span class="cat-tag" style="background:#DAF5EE;color:#9A86A8">未分類</span>`;
+            : `<span class="cat-tag" style="background:#DDEAD7;color:#7C8A72">未分類</span>`;
         const items = itemsOf(n);
         let body;
         if (items) {
@@ -1714,7 +1714,7 @@
                 </div>`;
             }).join('') + `</div><button class="btn ghost" style="margin-top:12px" onclick="itemAddNew(${id})">＋ 新增一則</button>`;
         } else {
-            body = `<div style="line-height:1.85;white-space:pre-wrap;color:#214A43">${esc(n.content)}</div>`;
+            body = `<div style="line-height:1.85;white-space:pre-wrap;color:#18241A">${esc(n.content)}</div>`;
         }
         const imgHTML = imgsOf(n).map(src =>
             imgTag(src, '', 'style="max-width:100%; border-radius:0; margin-top:18px; display:block; cursor:pointer;" onclick="openLightbox(this)"')).join('');
