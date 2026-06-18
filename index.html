@@ -45,6 +45,9 @@
         .cat-group .cat-header.solo:hover { background: rgba(255,255,255,.08); color: #FFFFFF; }
         .cat-group .cat-header .left { display: flex; align-items: center; gap: 8px; }
         .cat-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; box-shadow: 0 0 0 2px rgba(255,255,255,.15); }
+        .cat-drag { cursor: grab; color: var(--side-muted); flex: none; font-size: 13px; user-select: none; }
+        .cat-drag:active { cursor: grabbing; }
+        .cat-group.cat-dragover { box-shadow: inset 0 3px 0 var(--side-ink); }
         .cat-group .cat-header .chev { transition: .2s; font-size: 10px; display: inline-block; }
         .cat-group.collapsed .cat-body { display: none; }
         .cat-group.collapsed .chev { transform: rotate(-90deg); }
@@ -807,9 +810,9 @@
 
     /* ============ 分类与侧栏渲染 ============ */
     function uniqueCats() {
-        const set = new Set();
-        notes.forEach(n => { const c = (n.category || '').trim(); if (c) set.add(c); });
-        return [...set].sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+        const seen = []; const set = new Set();
+        notes.forEach(n => { const c = (n.category || '').trim(); if (c && !set.has(c)) { set.add(c); seen.push(c); } });
+        return seen;
     }
 
     function toggleCat(key) {
@@ -872,18 +875,21 @@
         const col = collapsed.has(key);
         const del = pinned ? '' : `<button class="cat-del" data-key="${esc(key)}" title="刪除此分類所有筆記">🗑</button>`;
         const dot = pinned ? '' : `<span class="cat-dot" style="background:${catColor(name)}"></span>`;
+        const realCat = !pinned && !!(name || '').trim() && name !== '未分類';
+        const grpAttr = realCat ? ` data-cat="${esc(name)}"` : '';
+        const handle = realCat ? `<span class="cat-drag" draggable="true" onclick="event.stopPropagation()" title="拖曳排序分類">⠿</span>` : '';
         // 單頁分類：整類只有一頁、且標題＝分類名 → 直接點標題開啟，不再多列一條
         if (!pinned && items.length === 1 && items[0].title === name) {
-            return `<div class="cat-group">
+            return `<div class="cat-group"${grpAttr}>
                 <div class="cat-header solo" data-open="${items[0].id}">
-                    <span class="left">${dot}${esc(name)}</span>
+                    <span class="left">${handle}${dot}${esc(name)}</span>
                     <span class="right">${del}</span>
                 </div>
             </div>`;
         }
-        return `<div class="cat-group ${col ? 'collapsed' : ''}">
+        return `<div class="cat-group ${col ? 'collapsed' : ''}"${grpAttr}>
             <div class="cat-header ${pinned ? 'pinned' : ''}" data-key="${esc(key)}">
-                <span class="left"><span class="chev">▾</span>${dot}${esc(name)}</span>
+                <span class="left">${handle}<span class="chev">▾</span>${dot}${esc(name)}</span>
                 <span class="right">${del}<span class="cat-count">${items.length}</span></span>
             </div>
             <div class="cat-body">${items.map(noteItemHTML).join('')}</div>
@@ -912,6 +918,34 @@
         setStatus('已清空全部筆記，按「云同步」會同步清空雲端');
     }
 
+    let catDragName = null;
+    function moveCategoryBlock(fromCat, toCat) {
+        if (fromCat === toCat) return;
+        const isFrom = n => !n.isPinned && (n.category || '') === fromCat;
+        const block = notes.filter(isFrom);
+        if (!block.length) return;
+        const rest = notes.filter(n => !isFrom(n));
+        let idx = rest.findIndex(n => !n.isPinned && (n.category || '') === toCat);
+        if (idx < 0) idx = rest.length;
+        rest.splice(idx, 0, ...block);
+        notes = rest;
+        persist(); render();
+        setStatus('已調整分類順序，記得按同步');
+    }
+    function bindCatDrag() {
+        document.querySelectorAll('#noteList .cat-group[data-cat]').forEach(g => {
+            const handle = g.querySelector('.cat-drag');
+            if (handle) handle.addEventListener('dragstart', e => { catDragName = g.dataset.cat; e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', g.dataset.cat); } catch (x) {} });
+            g.addEventListener('dragover', e => { if (catDragName == null) return; e.preventDefault(); g.classList.add('cat-dragover'); });
+            g.addEventListener('dragleave', () => g.classList.remove('cat-dragover'));
+            g.addEventListener('drop', e => {
+                e.preventDefault(); g.classList.remove('cat-dragover');
+                const to = g.dataset.cat, from = catDragName; catDragName = null;
+                if (from != null && to != null) moveCategoryBlock(from, to);
+            });
+        });
+    }
+
     function render() {
         const list = document.getElementById('noteList');
         if (!notes.length) {
@@ -931,6 +965,7 @@
         });
         list.innerHTML = html;
         updateCollapseToggle();
+        bindCatDrag();
     }
 
     /* 折叠点击（事件委派，避免分类名含特殊字元出错）*/
