@@ -27,6 +27,10 @@
         .s-btn.danger:hover { border-color: var(--danger); color: #F2C4B8; }
         .s-btn.needs-sync { background: #F2C230; color: #1C2A20; font-weight: 800; border-color: #F2C230; box-shadow: 0 0 0 2px rgba(242,194,48,.35); }
         .muted-hint { margin-top: 12px; font-size: 12px; color: var(--muted); line-height: 1.6; }
+        .rev-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+        .rev-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid var(--border-strong); padding: 10px 12px; background: var(--surface); font-size: 13px; }
+        .rev-item.big { border-color: var(--accent); background: var(--accent-soft); }
+        .rev-item b { font-size: 14px; }
         .s-btn.needs-sync:hover { background: #E7B41E; color: #1C2A20; }
         #syncStatus { font-size: 11px; color: var(--side-muted); padding: 8px 4px 2px; }
         .side-foot { margin-top: auto; border-top: 1px solid var(--side-line); padding: 10px 12px 12px; background: var(--side-2); }
@@ -434,6 +438,7 @@
                         else if (act === 'autopull') doPull(true);
                         else if (act === 'search') doSearch(pendingQuery);
                         else if (act === 'cleanup') doCleanupImages();
+                        else if (act === 'recover') doListRevisions();
                     },
                 });
             }
@@ -1102,8 +1107,55 @@
                 <input id="q" type="text" placeholder="搜尋 Google Drive 的試算表或文件，按 Enter" autocomplete="off" onkeydown="if(event.key==='Enter')searchDrive()">
                 <button class="btn primary" onclick="searchDrive()">搜尋</button>
             </div>
-            <p style="color:#7C8A72;font-size:13px;line-height:1.7">找到檔案後按「📥 匯入成筆記」即可加進來。試算表會依分頁變成一頁一頁的條列卡片。</p>`;
+            <p style="color:#7C8A72;font-size:13px;line-height:1.7">找到檔案後按「📥 匯入成筆記」即可加進來。試算表會依分頁變成一頁一頁的條列卡片。</p>
+            <hr style="border:none;border-top:1px solid var(--border);margin:18px 0">
+            <button class="btn ghost" onclick="recoverVersions()">🛟 救援：找回舊版本(含照片)</button>
+            <p style="color:#7C8A72;font-size:12px;line-height:1.6">不小心覆蓋掉照片時用這個，列出雲端歷史版本來還原。</p>`;
         const i = document.getElementById('q'); if (i) i.focus();
+    }
+    function recoverVersions() { if (ensureToken('recover')) doListRevisions(); }
+    async function doListRevisions() {
+        const area = document.getElementById('contentArea');
+        try {
+            area.innerHTML = '<h2 style="margin-top:0">🛟 救援：雲端歷史版本</h2><p>讀取中…</p>';
+            const id = await findDataFile();
+            if (!id) { area.innerHTML = '<h2>找不到資料檔</h2><p>Drive 上沒有 ue-notes-data.json。</p>'; return; }
+            const r = await fetch(`https://www.googleapis.com/drive/v3/files/${id}/revisions?fields=revisions(id,modifiedTime,size)&pageSize=1000`, { headers: { Authorization: 'Bearer ' + accessToken } });
+            if (r.status === 401) { accessToken = null; area.innerHTML = '<h2>登入過期</h2><p>請再按一次。</p>'; return; }
+            if (!r.ok) { area.innerHTML = '<h2>讀取失敗 HTTP ' + r.status + '</h2>'; return; }
+            const d = await r.json();
+            let revs = (d.revisions || []).slice();
+            if (!revs.length) { area.innerHTML = '<h2 style="margin-top:0">沒有歷史版本</h2><p>很遺憾，Drive 沒有保留可用的舊版本。</p>'; return; }
+            revs.sort((a, b) => new Date(b.modifiedTime) - new Date(a.modifiedTime));
+            let html = '<h2 style="margin-top:0">🛟 救援：雲端歷史版本</h2>';
+            html += '<p style="line-height:1.7">容量「大(MB)」的版本通常含照片。點「載入這個版本」會把它顯示出來預覽；<b>照片回來後再按「同步」存回</b>。沒回來就先別同步，回來試別的版本。</p>';
+            html += '<div class="rev-list">';
+            revs.forEach(rv => {
+                const bytes = rv.size ? +rv.size : 0;
+                const sizeTxt = bytes ? (bytes > 1048576 ? (bytes / 1048576).toFixed(1) + ' MB' : Math.round(bytes / 1024) + ' KB') : '—';
+                const big = bytes > 200 * 1024;
+                const t = rv.modifiedTime ? new Date(rv.modifiedTime).toLocaleString() : '';
+                html += `<div class="rev-item${big ? ' big' : ''}">
+                    <span>${t}　<b>${sizeTxt}</b>${big ? '　★ 可能含照片' : ''}</span>
+                    <button class="btn primary" onclick="restoreRevision('${id}','${rv.id}')">載入這個版本</button>
+                </div>`;
+            });
+            html += '</div>';
+            area.innerHTML = html;
+        } catch (e) { area.innerHTML = '<h2>救援錯誤</h2><p>' + esc(e.message || String(e)) + '</p>'; }
+    }
+    async function restoreRevision(fileId, revId) {
+        try {
+            setStatus('載入舊版本中…');
+            const r = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/revisions/${revId}?alt=media`, { headers: { Authorization: 'Bearer ' + accessToken } });
+            if (!r.ok) { alert('載入失敗 HTTP ' + r.status); return; }
+            const data = await r.json();
+            notes = (data || []).map(n => ({ category: '', ...n }));
+            cacheNotes(); markDirty(); render();
+            openDefaultNote();
+            setStatus('已載入舊版本，請確認照片是否回來');
+            alert('已載入這個舊版本！\n\n請確認你的照片有沒有回來：\n● 回來了 → 再按「同步」存回雲端，就完成救援。\n● 還是沒有 → 先別按同步，回到救援清單試「更大或更舊」的版本。');
+        } catch (e) { alert('載入錯誤：' + (e.message || e)); }
     }
 
     /* 取得一篇筆記的圖片陣列（相容舊的單張 img 欄位）*/
