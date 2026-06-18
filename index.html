@@ -237,9 +237,12 @@
         <div class="foot-actions">
             <button class="s-btn" id="syncBtn" onclick="syncToCloud()">同步</button>
             <button class="s-btn" onclick="pullFromCloud()">刷新</button>
-            <button class="s-btn" onclick="compressAllImages()" title="把現有所有圖片重新壓縮縮小">壓縮圖片</button>
-            <button class="s-btn" onclick="clearAllNotes()" title="清空全部">清空</button>
             <button class="s-btn" onclick="lockApp()" title="鎖定">🔒</button>
+        </div>
+        <div class="foot-actions" style="margin-top:6px">
+            <button class="s-btn" onclick="compressAllImages()" title="把現有所有圖片重新壓縮縮小">壓縮圖片</button>
+            <button class="s-btn" onclick="cleanupImages()" title="刪除沒有被任何筆記使用的圖檔">清理圖檔</button>
+            <button class="s-btn" onclick="clearAllNotes()" title="清空全部">清空</button>
         </div>
         <div id="syncStatus">尚未登入 Google</div>
     </div>
@@ -428,6 +431,7 @@
                         else if (act === 'pull') doPull();
                         else if (act === 'autopull') doPull(true);
                         else if (act === 'search') doSearch(pendingQuery);
+                        else if (act === 'cleanup') doCleanupImages();
                     },
                 });
             }
@@ -791,6 +795,9 @@
     function syncToCloud(){ if (ensureToken('sync')) doSync(); }
     async function doSync() {
         try {
+            setStatus("整理圖片中…");
+            const upTotal = await uploadPendingImages((d, t) => setStatus('上傳圖片 ' + d + '/' + t + '…'));
+            if (upTotal) cacheNotes(); // 圖片已換成參照，本體變小
             setStatus("同步中…");
             const body = JSON.stringify(notes);
             let id = await findDataFile();
@@ -835,6 +842,8 @@
             cacheNotes();
             markSynced();
             render();
+            if (currentId != null && notes.some(n => n.id === currentId)) viewNote(currentId);
+            else hydrateImages();
             setStatus("已從 Google Drive 載入 ✓");
             if (!quiet) alert("✅ 数据已同步！");
         } catch (e) {
@@ -1094,6 +1103,137 @@
         return n.img ? [n.img] : [];
     }
 
+    /* ===== 圖片獨立檔：每張圖存成 Drive 檔案，筆記只存參照 gd:<id> ===== */
+    const imgCache = new Map(); // id -> objectURL 或 dataURL
+    const IMG_PLACEHOLDER = 'data:image/gif;base64,R0lGODlhAQABAIAAAOXl5f///yH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==';
+    function imgResolveSrc(ref) {
+        if (typeof ref !== 'string') return IMG_PLACEHOLDER;
+        if (ref.indexOf('data:') === 0) return ref;
+        if (ref.indexOf('gd:') === 0) { return imgCache.get(ref.slice(3)) || IMG_PLACEHOLDER; }
+        return ref;
+    }
+    function imgTag(ref, cls, attrs) {
+        const isGd = typeof ref === 'string' && ref.indexOf('gd:') === 0;
+        const refAttr = isGd ? ` data-ref="${esc(ref)}"` : '';
+        return `<img class="${cls}"${refAttr} src="${imgResolveSrc(ref)}" ${attrs || ''}>`;
+    }
+    async function hydrateImages() {
+        if (!accessToken) return;
+        const els = document.querySelectorAll('img[data-ref]');
+        for (const el of els) {
+            const ref = el.getAttribute('data-ref');
+            if (!ref || ref.indexOf('gd:') !== 0) continue;
+            const id = ref.slice(3);
+            if (imgCache.has(id)) { if (el.src !== imgCache.get(id)) el.src = imgCache.get(id); continue; }
+            try {
+                const r = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`, { headers: { Authorization: 'Bearer ' + accessToken } });
+                if (!r.ok) continue;
+                const blob = await r.blob();
+                const url = URL.createObjectURL(blob);
+                imgCache.set(id, url);
+                document.querySelectorAll('img[data-ref="gd:' + id + '"]').forEach(x => x.src = url);
+            } catch (e) { /* 留著 placeholder */ }
+        }
+    }
+    async function uploadImageToDrive(dataURL) {
+        const m = /^data:(image\/[a-zA-Z+]+);base64,(.*)$/.exec(dataURL);
+        if (!m) return null;
+        const mime = m[1], b64 = m[2];
+        const ext = (mime.split('/')[1] || 'jpg').replace('+xml', '');
+        const boundary = 'ueimg' + Date.now() + Math.random().toString(36).slice(2);
+        const meta = { name: 'ue-img-' + Date.now() + '-' + Math.random().toString(36).slice(2) + '.' + ext, mimeType: mime };
+        const body =
+            `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n` +
+            `--${boundary}\r\nContent-Type: ${mime}\r\nContent-Transfer-Encoding: base64\r\n\r\n${b64}\r\n--${boundary}--`;
+        const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',
+            { method: 'POST', headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'multipart/related; boundary=' + boundary }, body });
+        if (r.status === 401) { accessToken = null; throw { code: 401 }; }
+        if (!r.ok) throw new Error('圖片上傳失敗 HTTP ' + r.status);
+        const d = await r.json();
+        return d.id;
+    }
+    // 把 notes 內所有尚未上傳的圖（data: 開頭）上傳成獨立檔，換成 gd:<id>
+    async function uploadPendingImages(onProg) {
+        const arrs = [];
+        const collect = a => { if (Array.isArray(a)) arrs.push(a); };
+        notes.forEach(n => {
+            collect(n.imgs);
+            if (Array.isArray(n.items)) n.items.forEach(it => {
+                collect(it.imgs);
+                if (Array.isArray(it.boxes)) it.boxes.forEach(b => { if (b && Array.isArray(b.imgs)) collect(b.imgs); });
+            });
+        });
+        let total = 0; arrs.forEach(a => a.forEach(v => { if (typeof v === 'string' && v.indexOf('data:') === 0) total++; }));
+        if (!total) return 0;
+        let done = 0;
+        for (const a of arrs) {
+            for (let i = 0; i < a.length; i++) {
+                const v = a[i];
+                if (typeof v === 'string' && v.indexOf('data:') === 0) {
+                    const id = await uploadImageToDrive(v);
+                    if (id) { imgCache.set(id, v); a[i] = 'gd:' + id; }
+                    done++; if (onProg) onProg(done, total);
+                }
+            }
+        }
+        return total;
+    }
+
+    // 收集 notes 內所有「gd:<id>」參照
+    function collectRefIds() {
+        const set = new Set();
+        const scan = a => { if (Array.isArray(a)) a.forEach(v => { if (typeof v === 'string' && v.indexOf('gd:') === 0) set.add(v.slice(3)); }); };
+        notes.forEach(n => {
+            scan(n.imgs);
+            if (Array.isArray(n.items)) n.items.forEach(it => {
+                scan(it.imgs);
+                if (Array.isArray(it.boxes)) it.boxes.forEach(b => { if (b && Array.isArray(b.imgs)) scan(b.imgs); });
+            });
+        });
+        return set;
+    }
+    function cleanupImages() { if (ensureToken('cleanup')) doCleanupImages(); }
+    async function doCleanupImages() {
+        try {
+            // 確保最新狀態：先把待上傳的圖上傳並換成參照，避免把「還沒同步的新圖」誤判為無用
+            setStatus('清理前先整理…');
+            const up = await uploadPendingImages((d, t) => setStatus('上傳圖片 ' + d + '/' + t + '…'));
+            if (up) { cacheNotes(); markDirty(); }
+            const refIds = collectRefIds();
+            // 列出本 App 建立的所有圖檔（檔名以 ue-img- 開頭）
+            setStatus('盤點雲端圖檔…');
+            const files = [];
+            let pageToken = '';
+            do {
+                const q = encodeURIComponent("name contains 'ue-img-' and trashed=false");
+                let url = `https://www.googleapis.com/drive/v3/files?q=${q}&spaces=drive&fields=nextPageToken,files(id,name)&pageSize=1000`;
+                if (pageToken) url += '&pageToken=' + pageToken;
+                const r = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
+                if (r.status === 401) { accessToken = null; setStatus('登入過期'); alert('登入已過期，請再按一次。'); return; }
+                if (!r.ok) { setStatus('盤點失敗 HTTP ' + r.status); alert('盤點失敗（HTTP ' + r.status + '）'); return; }
+                const d = await r.json();
+                (d.files || []).forEach(f => files.push(f));
+                pageToken = d.nextPageToken || '';
+            } while (pageToken);
+
+            const orphans = files.filter(f => !refIds.has(f.id));
+            if (!orphans.length) { setStatus('沒有可清理的圖檔 ✓'); alert('檢查完成：沒有未使用的圖檔。'); return; }
+            if (!confirm('找到 ' + orphans.length + ' 個沒有被任何筆記使用的圖檔。\n要從 Google Drive 永久刪除以釋放空間嗎？\n（已在使用中的圖不受影響）')) { setStatus('已取消清理'); return; }
+
+            let removed = 0;
+            for (const f of orphans) {
+                const dr = await fetch('https://www.googleapis.com/drive/v3/files/' + f.id, { method: 'DELETE', headers: { Authorization: 'Bearer ' + accessToken } });
+                if (dr.ok || dr.status === 204) removed++;
+                setStatus('清理中 ' + removed + '/' + orphans.length + '…');
+            }
+            setStatus('已清理 ' + removed + ' 個未使用圖檔 ✓');
+            alert('完成：已刪除 ' + removed + ' 個未使用的圖檔。');
+        } catch (e) {
+            if (e && e.code === 401) { setStatus('登入過期'); alert('登入已過期，請再按一次。'); return; }
+            setStatus('清理錯誤'); alert('清理發生錯誤：' + (e.message || e));
+        }
+    }
+
     /* 圖片編輯器 UI（拖曳 / Ctrl+V / 選檔，多張）*/
     function imgEditorHTML() {
         return `
@@ -1107,7 +1247,8 @@
         const box = document.getElementById('imgThumbs');
         if (!box) return;
         box.innerHTML = editImgs.map((src, i) =>
-            `<div class="img-thumb"><img src="${src}"><button type="button" class="img-x" onclick="removeImg(${i})">✕</button></div>`).join('');
+            `<div class="img-thumb">${imgTag(src, '')}<button type="button" class="img-x" onclick="removeImg(${i})">✕</button></div>`).join('');
+        hydrateImages();
     }
     // 將圖片檔縮小：最長邊上限 1280，輸出 JPEG（品質 0.82），回傳 dataURL
     function compressImage(file, cb) {
@@ -1272,10 +1413,11 @@
                     <label class="img-pick">選檔<input type="file" accept="image/*" multiple style="display:none" onchange="boxImgTarget=${i};addBoxImgFiles(${i}, this.files); this.value='';"></label>
                 </div>
                 <div class="box-imgs">${b.imgs.map((src, j) =>
-                `<div class="img-thumb"><img src="${src}"><button type="button" class="img-x" onclick="removeBoxImg(${i},${j})">✕</button></div>`).join('')}</div>
+                `<div class="img-thumb">${imgTag(src, '')}<button type="button" class="img-x" onclick="removeBoxImg(${i},${j})">✕</button></div>`).join('')}</div>
             </div>`;
         }).join('');
         bindBoxDrops();
+        hydrateImages();
     }
     function bindBoxDrops() {
         document.querySelectorAll('#boxesBox .box-drop').forEach(dz => {
@@ -1550,7 +1692,7 @@
                 const firstBox = (bxs.find(b => (b.b || '').trim()) || { b: '' }).b;
                 const label = (it.t || '').trim() || firstBox.split('\n')[0].slice(0, 40) || '（無標題）';
                 const boxesHTML = bxs.filter(b => (b.b || '').trim() || b.imgs.length).map(b => {
-                    const imgs = b.imgs.length ? '<div class="qbox-imgs">' + b.imgs.map(src => `<img src="${src}" class="qbox-img" onclick="openLightbox(this)" title="點圖放大">`).join('') + '</div>' : '';
+                    const imgs = b.imgs.length ? '<div class="qbox-imgs">' + b.imgs.map(src => imgTag(src, 'qbox-img', 'onclick="openLightbox(this)" title="點圖放大"')).join('') + '</div>' : '';
                     const copyBtn = (b.b || '').trim() ? `<button class="qbox-copy" onclick="copyText(this)" data-copy="${esc(b.b)}">複製</button>` : '';
                     return `<div class="qbox"><div class="qbox-t">${renderBoxBody(b.b)}${imgs}</div>${copyBtn}</div>`;
                 }).join('');
@@ -1574,7 +1716,7 @@
             body = `<div style="line-height:1.85;white-space:pre-wrap;color:#214A43">${esc(n.content)}</div>`;
         }
         const imgHTML = imgsOf(n).map(src =>
-            `<img src="${src}" style="max-width:100%; border-radius:0; margin-top:18px; display:block;">`).join('');
+            imgTag(src, '', 'style="max-width:100%; border-radius:0; margin-top:18px; display:block; cursor:pointer;" onclick="openLightbox(this)"')).join('');
         document.getElementById('contentArea').innerHTML = `
             ${tag}
             <h2 style="margin:10px 0 14px">${n.isPinned ? '📌 ' : ''}${esc(n.title)}</h2>
@@ -1588,6 +1730,7 @@
             </div>
             ${body}
             ${imgHTML}`;
+        hydrateImages();
     }
 
     function catDatalist() {
