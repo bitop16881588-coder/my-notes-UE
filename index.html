@@ -229,6 +229,7 @@
 <div id="sidebar">
     <div class="side-head">
         <div class="brand">UE 操作手冊</div>
+        <button class="s-btn" style="width:100%;margin-top:8px" onclick="openCloud()">☁ 雲端搜尋 / 匯入</button>
     </div>
     <div id="listCtrl"><button id="collapseToggle" onclick="toggleAllCats()">收合全部</button></div>
     <div id="noteList"></div>
@@ -253,7 +254,6 @@
     <div id="filterBar">
         <span class="lbl">🔍</span>
         <input id="filterInput" type="text" placeholder="篩選罐頭語…打字即時搜尋，點卡片即可複製" autocomplete="off" oninput="runFilter()">
-        <button class="btn ghost" onclick="openCloud()">☁ 雲端</button>
     </div>
     <div id="contentArea" class="card"></div>
 </div>
@@ -274,6 +274,7 @@
             sessionStorage.setItem('ueUnlocked', '1');
             document.getElementById('lockScreen').style.display = 'none';
             document.getElementById('lockMsg').textContent = '';
+            openDefaultNote();
             autoLogin();
         } else {
             document.getElementById('lockMsg').textContent = '密碼錯誤';
@@ -844,7 +845,7 @@
             markSynced();
             render();
             if (currentId != null && notes.some(n => n.id === currentId)) viewNote(currentId);
-            else hydrateImages();
+            else openDefaultNote();
             setStatus("已從 Google Drive 載入 ✓");
             if (!quiet) alert("✅ 数据已同步！");
         } catch (e) {
@@ -1043,6 +1044,13 @@
             ・ 第一次用、或要更新資料：右上「<b>☁ 雲端</b>」搜尋並匯入你的試算表，再按底部「<b>同步</b>」存回雲端。</p>`;
     }
     function showWelcome(){ currentId = null; imgEditActive = false; boxEditMode = false; document.getElementById('contentArea').innerHTML = welcomeHTML(); }
+    // 開啟後直接顯示罐頭語：開上次看的那頁，沒有就開第一頁
+    function openDefaultNote() {
+        if (!notes.length) { showWelcome(); hydrateImages(); return; }
+        const last = +(localStorage.getItem('ueLast') || 0);
+        const n = notes.find(x => x.id === last) || notes[0];
+        if (n) viewNote(n.id); else { showWelcome(); hydrateImages(); }
+    }
 
     /* ===== 即時篩選罐頭語（打字即時、點卡片複製）===== */
     function runFilter() {
@@ -1680,6 +1688,7 @@
 
     function viewNote(id) {
         currentId = id; imgEditActive = false; boxEditMode = false;
+        try { localStorage.setItem('ueLast', String(id)); } catch (e) {}
         const n = notes.find(n => n.id === id);
         if (!n) { showWelcome(); return; }
         const tag = n.category
@@ -1880,8 +1889,9 @@
     document.getElementById('lockInput').addEventListener('keydown', e => { if (e.key === 'Enter') unlockApp(); });
     initLock();
 
-    showWelcome();
     render();
+    if (sessionStorage.getItem('ueUnlocked') === '1') { openDefaultNote(); autoLogin(); }
+    else showWelcome();
 </script>
 </body>
 </html>
