@@ -25,6 +25,8 @@
         .s-btn.primary { flex: none; width: 100%; border: none; background: var(--accent); color: #fff; font-weight: 600; padding: 11px; font-size: 14px; }
         .s-btn.primary:hover { background: var(--accent-d); }
         .s-btn.danger:hover { border-color: var(--danger); color: #F2C4B8; }
+        .s-btn.needs-sync { background: #F2C230; color: #1C2A20; font-weight: 800; border-color: #F2C230; box-shadow: 0 0 0 2px rgba(242,194,48,.35); }
+        .s-btn.needs-sync:hover { background: #E7B41E; color: #1C2A20; }
         #syncStatus { font-size: 11px; color: var(--side-muted); padding: 8px 4px 2px; }
         .side-foot { margin-top: auto; border-top: 1px solid var(--side-line); padding: 10px 12px 12px; background: var(--side-2); }
         .foot-actions { display: flex; gap: 6px; }
@@ -232,7 +234,7 @@
     <div id="noteList"></div>
     <div class="side-foot">
         <div class="foot-actions">
-            <button class="s-btn" onclick="syncToCloud()">同步</button>
+            <button class="s-btn" id="syncBtn" onclick="syncToCloud()">同步</button>
             <button class="s-btn" onclick="pullFromCloud()">刷新</button>
             <button class="s-btn" onclick="compressAllImages()" title="把現有所有圖片重新壓縮縮小">壓縮圖片</button>
             <button class="s-btn" onclick="clearAllNotes()" title="清空全部">清空</button>
@@ -303,14 +305,58 @@
     let pendingQuery = "";
 
     function setStatus(t){ const s = document.getElementById('syncStatus'); if (s) s.textContent = t; }
+    let quotaWarned = false;
+    let imagesCloudOnlyNoticed = false;
+    let dirty = false;
+    function updateSyncBtn() {
+        const b = document.getElementById('syncBtn');
+        if (b) { b.classList.toggle('needs-sync', dirty); b.textContent = dirty ? '● 同步' : '同步'; }
+    }
+    function markDirty() { dirty = true; updateSyncBtn(); }
+    function markSynced() { dirty = false; updateSyncBtn(); }
+    // 產生「不含圖片」的精簡複本（給本機快取用，雲端仍存完整含圖版）
+    function stripImages(arr) {
+        return (arr || []).map(n => {
+            const c = { ...n };
+            if (Array.isArray(c.imgs)) c.imgs = [];
+            if (Array.isArray(c.items)) {
+                c.items = c.items.map(it => {
+                    const ic = { ...it };
+                    if (Array.isArray(ic.imgs)) ic.imgs = [];
+                    if (Array.isArray(ic.boxes)) ic.boxes = ic.boxes.map(b => (b && typeof b === 'object') ? { ...b, imgs: [] } : b);
+                    return ic;
+                });
+            }
+            return c;
+        });
+    }
     function cacheNotes(){
-        try { localStorage.setItem('ueNotes', JSON.stringify(notes)); return true; }
-        catch (e) { console.warn('本機快取已滿，略過（不影響雲端）：', e); return false; }
+        try {
+            localStorage.setItem('ueNotes', JSON.stringify(notes));
+            return true;
+        } catch (e) {
+            // 本機放不下完整版（圖片太多）→ 改存不含圖片的精簡版，避免爆掉
+            try {
+                localStorage.setItem('ueNotes', JSON.stringify(stripImages(notes)));
+                if (!imagesCloudOnlyNoticed) {
+                    imagesCloudOnlyNoticed = true;
+                    setStatus('圖片改為只存雲端（本機放不下）；重整後會自動從雲端帶回');
+                }
+                return true;
+            } catch (e2) {
+                console.warn('連精簡版都存不下：', e2);
+                return false;
+            }
+        }
     }
     function persist(){
+        markDirty();
         if (!cacheNotes()) {
-            setStatus('⚠ 本機空間已滿（圖片過多），請按「同步」存到雲端');
-            alert('本機儲存空間已滿（通常是圖片太多）。\n\n資料已暫存在畫面上，請立刻按「同步」存到 Google Drive，避免遺失。\n建議刪掉部分大圖，或重貼一次讓它自動壓縮以省空間。');
+            setStatus('⚠ 本機已滿，請按「同步」存到雲端');
+            if (!quotaWarned) {
+                quotaWarned = true;
+                alert('本機儲存空間已滿。\n資料先暫存在畫面上，請按「同步」存到 Google Drive。');
+            }
         }
     }
 
@@ -320,7 +366,7 @@
             if (typeof dataURL !== 'string' || dataURL.indexOf('data:image') !== 0) { resolve(null); return; }
             const img = new Image();
             img.onload = () => {
-                const MAX = 1280;
+                const MAX = 1000;
                 let w = img.width, h = img.height;
                 if (w > MAX || h > MAX) { if (w >= h) { h = Math.round(h * MAX / w); w = MAX; } else { w = Math.round(w * MAX / h); h = MAX; } }
                 try {
@@ -328,7 +374,7 @@
                     cv.width = w; cv.height = h;
                     cv.getContext('2d').drawImage(img, 0, 0, w, h);
                     const isPng = /^data:image\/png/i.test(dataURL);
-                    const out = cv.toDataURL(isPng ? 'image/png' : 'image/jpeg', 0.82);
+                    const out = cv.toDataURL(isPng ? 'image/png' : 'image/jpeg', 0.72);
                     resolve(out.length < dataURL.length ? out : null);
                 } catch (e) { resolve(null); }
             };
@@ -763,11 +809,9 @@
             }
             if (r.status === 401) { accessToken = null; setStatus("登入過期"); alert("登入已過期，請再按一次「云同步」。"); return; }
             if (!r.ok) { console.error(await r.text()); setStatus("同步失敗 HTTP " + r.status); alert("❌ 同步失敗（HTTP " + r.status + "）"); return; }
-            const cached = cacheNotes();
-            setStatus("已同步到 Google Drive ✓");
-            alert(cached
-                ? "✅ 云同步完成！（已存到你的 Google Drive）"
-                : "✅ 已成功存到 Google Drive！\n（本機空間已滿，這次只存雲端；之後在任何裝置按「刷新」就能讀回，資料不會遺失。建議刪掉部分大圖、或重貼讓它自動壓縮。）");
+            cacheNotes();
+            markSynced();
+            if (!imagesCloudOnlyNoticed) setStatus("已同步到 Google Drive ✓");
         } catch (e) {
             if (e && e.code === 401) { setStatus("登入過期"); alert("登入已過期，請再按一次「云同步」。"); return; }
             setStatus("同步錯誤"); alert("同步發生錯誤：" + (e.message || e));
@@ -788,6 +832,7 @@
             // 旧资料相容：补上 category 栏位
             notes = (notes || []).map(n => ({ category: '', ...n }));
             cacheNotes();
+            markSynced();
             render();
             setStatus("已從 Google Drive 載入 ✓");
             if (!quiet) alert("✅ 数据已同步！");
@@ -1070,7 +1115,7 @@
         fr.onload = e => {
             const img = new Image();
             img.onload = () => {
-                const MAX = 1280;
+                const MAX = 1000;
                 let { width: w, height: h } = img;
                 if (w > MAX || h > MAX) {
                     if (w >= h) { h = Math.round(h * MAX / w); w = MAX; }
@@ -1082,7 +1127,7 @@
                     cv.getContext('2d').drawImage(img, 0, 0, w, h);
                     // PNG 透明圖維持 PNG，其餘轉 JPEG 以縮小體積
                     const isPng = /image\/png/i.test(file.type);
-                    cb(cv.toDataURL(isPng ? 'image/png' : 'image/jpeg', 0.82));
+                    cb(cv.toDataURL(isPng ? 'image/png' : 'image/jpeg', 0.72));
                 } catch (err) { cb(e.target.result); }
             };
             img.onerror = () => cb(e.target.result);
