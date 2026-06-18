@@ -26,6 +26,7 @@
         .s-btn.primary:hover { background: var(--accent-d); }
         .s-btn.danger:hover { border-color: var(--danger); color: #F2C4B8; }
         .s-btn.needs-sync { background: #F2C230; color: #1C2A20; font-weight: 800; border-color: #F2C230; box-shadow: 0 0 0 2px rgba(242,194,48,.35); }
+        .muted-hint { margin-top: 12px; font-size: 12px; color: var(--muted); line-height: 1.6; }
         .s-btn.needs-sync:hover { background: #E7B41E; color: #1C2A20; }
         #syncStatus { font-size: 11px; color: var(--side-muted); padding: 8px 4px 2px; }
         .side-foot { margin-top: auto; border-top: 1px solid var(--side-line); padding: 10px 12px 12px; background: var(--side-2); }
@@ -229,7 +230,7 @@
     <div class="side-head">
         <div class="brand">UE 知識庫</div>
         <button class="s-btn primary" onclick="newNote()">＋ 新增筆記</button>
-        <button class="s-btn" style="margin-top:6px;width:100%" onclick="newCategory()">＋ 新增分類</button>
+        <button class="s-btn" style="margin-top:6px;width:100%" onclick="newCategory()">＋ 新增分類 / 追加頁</button>
     </div>
     <div id="listCtrl"><button id="collapseToggle" onclick="toggleAllCats()">收合全部</button></div>
     <div id="noteList"></div>
@@ -1738,15 +1739,30 @@
     }
 
     function newCategory() {
-        const name = (prompt('輸入新分類名稱：') || '').trim();
-        if (!name) return;
-        const exists = notes.some(n => (n.category || '').trim() === name);
-        if (exists && !confirm('分類「' + name + '」已存在，仍要在此分類新增一頁嗎？')) return;
+        currentId = null; imgEditActive = false; boxEditMode = false;
+        document.getElementById('contentArea').innerHTML = `
+            <div class="editor">
+                <h2 style="margin-top:0">新增 / 在現有分類追加一頁</h2>
+                <label>分類（下拉可選你原本的分類來「追加」，或直接輸入新分類）</label>
+                <input type="text" id="ncCat" list="catList" placeholder="選現有分類，或輸入新分類名稱">
+                ${catDatalist()}
+                <label>頁面標題（留空就用分類名）</label>
+                <input type="text" id="ncTitle" placeholder="例如：常見問題、退款話術、活動說明…">
+                <div class="row-actions">
+                    <button class="btn primary" onclick="createCategoryPage()">建立</button>
+                    <button class="btn ghost" onclick="showWelcome()">取消</button>
+                </div>
+                <p class="muted-hint">選「原本就有的分類」＋填一個新標題 → 會在那個分類底下<strong>追加一頁</strong>；輸入新名稱則建立新分類。</p>
+            </div>`;
+    }
+    function createCategoryPage() {
+        const cat = (document.getElementById('ncCat').value || '').trim();
+        if (!cat) { alert('請選擇或輸入分類'); return; }
+        const title = (document.getElementById('ncTitle').value || '').trim() || cat;
         const id = Date.now();
-        // 建立一個該分類的罐頭語頁（標題＝分類名，可直接開始加「則／區塊」）
-        notes.push({ id, title: name, content: '', items: [], imgs: [], img: '', isPinned: false, category: name });
+        notes.push({ id, title, content: '', items: [], imgs: [], img: '', isPinned: false, category: cat });
         persist(); render(); viewNote(id);
-        setStatus('已新增分類「' + name + '」，記得按同步');
+        setStatus('已在「' + cat + '」新增一頁，記得按同步');
     }
 
     function newNote() {
