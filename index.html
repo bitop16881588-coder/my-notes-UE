@@ -229,6 +229,7 @@
     <div class="side-head">
         <div class="brand">UE 知識庫</div>
         <button class="s-btn primary" onclick="newNote()">＋ 新增筆記</button>
+        <button class="s-btn" style="margin-top:6px;width:100%" onclick="newCategory()">＋ 新增分類</button>
     </div>
     <div id="listCtrl"><button id="collapseToggle" onclick="toggleAllCats()">收合全部</button></div>
     <div id="noteList"></div>
@@ -1591,6 +1592,18 @@
 
     function catDatalist() {
         return `<datalist id="catList">${uniqueCats().map(c => `<option value="${esc(c)}">`).join('')}</datalist>`;
+    }
+
+    function newCategory() {
+        const name = (prompt('輸入新分類名稱：') || '').trim();
+        if (!name) return;
+        const exists = notes.some(n => (n.category || '').trim() === name);
+        if (exists && !confirm('分類「' + name + '」已存在，仍要在此分類新增一頁嗎？')) return;
+        const id = Date.now();
+        // 建立一個該分類的罐頭語頁（標題＝分類名，可直接開始加「則／區塊」）
+        notes.push({ id, title: name, content: '', items: [], imgs: [], img: '', isPinned: false, category: name });
+        persist(); render(); viewNote(id);
+        setStatus('已新增分類「' + name + '」，記得按同步');
     }
 
     function newNote() {
