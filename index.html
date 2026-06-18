@@ -100,6 +100,9 @@
         .qitem-chev { color: var(--muted); font-size: 12px; transition: .2s; flex: none; }
         .qitem.open .qitem-chev { transform: rotate(90deg); }
         .qitem-title { flex: 1; font-weight: 700; color: #0F2A24; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .qdrag { cursor: grab; color: var(--faint); padding: 0 4px; font-size: 15px; flex: none; user-select: none; }
+        .qdrag:active { cursor: grabbing; }
+        .qitem.dragover { box-shadow: inset 0 3px 0 var(--accent); }
         .qitem-head .item-copy { position: static; flex: none; }
         .qitem-more { flex: none; background: transparent; border: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 0 6px; line-height: 1; }
         .qitem-more:hover { color: var(--accent-d); }
@@ -1247,6 +1250,20 @@
     }
     function toggleQ(head) { head.parentElement.classList.toggle('open'); }
 
+    let qDragIdx = -1;
+    function qDragStart(e, idx) { qDragIdx = idx; e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', String(idx)); } catch (x) {} }
+    function qDragOver(e, el) { if (qDragIdx < 0) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; el.classList.add('dragover'); }
+    function qDrop(e, id, idx, el) {
+        e.preventDefault(); el.classList.remove('dragover');
+        if (qDragIdx < 0 || qDragIdx === idx) { qDragIdx = -1; return; }
+        const n = notes.find(n => n.id === id);
+        if (!n || !Array.isArray(n.items)) { qDragIdx = -1; return; }
+        const [m] = n.items.splice(qDragIdx, 1);
+        n.items.splice(idx, 0, m);
+        qDragIdx = -1;
+        persist(); viewNote(id); setStatus('已調整順序，記得按同步');
+    }
+
     function toggleOptMenu(e) {
         e.stopPropagation();
         const m = document.getElementById('optMenu');
@@ -1456,8 +1473,9 @@
                     const copyBtn = (b.b || '').trim() ? `<button class="qbox-copy" onclick="copyText(this)" data-copy="${esc(b.b)}">複製</button>` : '';
                     return `<div class="qbox"><div class="qbox-t">${renderBoxBody(b.b)}${imgs}</div>${copyBtn}</div>`;
                 }).join('');
-                return `<div class="qitem">
+                return `<div class="qitem" ondragover="qDragOver(event,this)" ondragleave="this.classList.remove('dragover')" ondrop="qDrop(event,${id},${idx},this)">
                     <div class="qitem-head" onclick="toggleQ(this)">
+                        <span class="qdrag" draggable="true" onclick="event.stopPropagation()" ondragstart="qDragStart(event,${idx})" title="拖曳排序">⠿</span>
                         <span class="qitem-chev">▸</span>
                         <span class="qitem-title">${esc(label)}</span>
                         <button class="item-copy" onclick="event.stopPropagation();copyItem(${id},${idx})">複製</button>
