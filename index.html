@@ -213,6 +213,7 @@
         <div class="foot-actions">
             <button class="s-btn" onclick="syncToCloud()">同步</button>
             <button class="s-btn" onclick="pullFromCloud()">刷新</button>
+            <button class="s-btn" onclick="compressAllImages()" title="把現有所有圖片重新壓縮縮小">壓縮圖片</button>
             <button class="s-btn" onclick="clearAllNotes()" title="清空全部">清空</button>
             <button class="s-btn" onclick="lockApp()" title="鎖定">🔒</button>
         </div>
@@ -281,15 +282,66 @@
     let pendingQuery = "";
 
     function setStatus(t){ const s = document.getElementById('syncStatus'); if (s) s.textContent = t; }
+    function cacheNotes(){
+        try { localStorage.setItem('ueNotes', JSON.stringify(notes)); return true; }
+        catch (e) { console.warn('本機快取已滿，略過（不影響雲端）：', e); return false; }
+    }
     function persist(){
-        try {
-            localStorage.setItem('ueNotes', JSON.stringify(notes));
-        } catch (e) {
-            // localStorage 約 5MB，圖片太多會塞爆 → 不中斷流程，改提醒
+        if (!cacheNotes()) {
             setStatus('⚠ 本機空間已滿（圖片過多），請按「同步」存到雲端');
-            console.warn('localStorage 已滿：', e);
-            alert('本機儲存空間已滿（通常是圖片太多）。\n\n資料已暫存在畫面上，請立刻按「同步」存到 Google Drive，避免遺失。\n建議刪掉部分大圖，或之後加圖會自動壓縮以省空間。');
+            alert('本機儲存空間已滿（通常是圖片太多）。\n\n資料已暫存在畫面上，請立刻按「同步」存到 Google Drive，避免遺失。\n建議刪掉部分大圖，或重貼一次讓它自動壓縮以省空間。');
         }
+    }
+
+    // 把一張既有的 base64 圖片重新縮小（最長邊 1280；只在更小時才取代）
+    function recompressDataURL(dataURL) {
+        return new Promise(resolve => {
+            if (typeof dataURL !== 'string' || dataURL.indexOf('data:image') !== 0) { resolve(null); return; }
+            const img = new Image();
+            img.onload = () => {
+                const MAX = 1280;
+                let w = img.width, h = img.height;
+                if (w > MAX || h > MAX) { if (w >= h) { h = Math.round(h * MAX / w); w = MAX; } else { w = Math.round(w * MAX / h); h = MAX; } }
+                try {
+                    const cv = document.createElement('canvas');
+                    cv.width = w; cv.height = h;
+                    cv.getContext('2d').drawImage(img, 0, 0, w, h);
+                    const isPng = /^data:image\/png/i.test(dataURL);
+                    const out = cv.toDataURL(isPng ? 'image/png' : 'image/jpeg', 0.82);
+                    resolve(out.length < dataURL.length ? out : null);
+                } catch (e) { resolve(null); }
+            };
+            img.onerror = () => resolve(null);
+            img.src = dataURL;
+        });
+    }
+    // 一鍵壓縮現有全部圖片
+    async function compressAllImages() {
+        if (!confirm('將把目前所有圖片重新壓縮縮小（最長邊 1280）。\n通常能省下不少空間；壓完請按「同步」存回雲端。\n要繼續嗎？')) return;
+        setStatus('壓縮圖片中…請稍候');
+        let count = 0, before = 0, after = 0;
+        async function doArr(arr) {
+            if (!Array.isArray(arr)) return;
+            for (let i = 0; i < arr.length; i++) {
+                const orig = arr[i];
+                const r = await recompressDataURL(orig);
+                if (r) { before += orig.length; after += r.length; arr[i] = r; count++; }
+            }
+        }
+        for (const n of notes) {
+            await doArr(n.imgs);
+            if (Array.isArray(n.items)) {
+                for (const it of n.items) {
+                    await doArr(it.imgs);
+                    if (Array.isArray(it.boxes)) for (const b of it.boxes) { if (b && Array.isArray(b.imgs)) await doArr(b.imgs); }
+                }
+            }
+        }
+        cacheNotes(); render();
+        if (currentId) viewNote(currentId);
+        const savedMB = Math.max(0, before - after) / 1024 / 1024 / 1.37; // base64→實際位元組約 /1.37
+        setStatus('壓縮完成 ✓');
+        alert(`已壓縮 ${count} 張圖片，約省下 ${savedMB.toFixed(1)} MB。\n\n請現在按一次「同步」存回 Google Drive。`);
     }
 
     window.addEventListener('load', () => {
@@ -690,9 +742,11 @@
             }
             if (r.status === 401) { accessToken = null; setStatus("登入過期"); alert("登入已過期，請再按一次「云同步」。"); return; }
             if (!r.ok) { console.error(await r.text()); setStatus("同步失敗 HTTP " + r.status); alert("❌ 同步失敗（HTTP " + r.status + "）"); return; }
-            localStorage.setItem('ueNotes', JSON.stringify(notes));
+            const cached = cacheNotes();
             setStatus("已同步到 Google Drive ✓");
-            alert("✅ 云同步完成！（已存到你的 Google Drive）");
+            alert(cached
+                ? "✅ 云同步完成！（已存到你的 Google Drive）"
+                : "✅ 已成功存到 Google Drive！\n（本機空間已滿，這次只存雲端；之後在任何裝置按「刷新」就能讀回，資料不會遺失。建議刪掉部分大圖、或重貼讓它自動壓縮。）");
         } catch (e) {
             if (e && e.code === 401) { setStatus("登入過期"); alert("登入已過期，請再按一次「云同步」。"); return; }
             setStatus("同步錯誤"); alert("同步發生錯誤：" + (e.message || e));
@@ -712,7 +766,7 @@
             notes = await r.json();
             // 旧资料相容：补上 category 栏位
             notes = (notes || []).map(n => ({ category: '', ...n }));
-            localStorage.setItem('ueNotes', JSON.stringify(notes));
+            cacheNotes();
             render();
             setStatus("已從 Google Drive 載入 ✓");
             if (!quiet) alert("✅ 数据已同步！");
